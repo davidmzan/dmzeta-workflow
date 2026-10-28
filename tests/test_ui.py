@@ -1,7 +1,7 @@
 """Interfaz dividida en css/ y js/: referencias, sintaxis, servidor de estáticos y arranque en modo demo (sin navegador)."""
 import http.client, os, re, shutil, subprocess, threading, unittest
 from http.server import ThreadingHTTPServer
-from _common import ROOT, TMP
+from _common import ROOT
 import workflow_server as ws
 
 UI = os.path.join(ROOT, 'ui')

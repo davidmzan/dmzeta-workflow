@@ -1,6 +1,5 @@
 """Gramática de nombres de archivo y limpieza de títulos y artistas."""
-import sys, os, re, csv, json, time, shutil, hashlib, subprocess
-import numpy as np
+import os, re
 
 # ───────────────────────── nombres ─────────────────────────
 def parse_name(fname):

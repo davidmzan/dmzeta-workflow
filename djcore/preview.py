@@ -1,5 +1,5 @@
 """Audio de prueba para escuchar el grid: clips con clics y vistas previas."""
-import sys, os, re, csv, json, time, shutil, hashlib, subprocess
+import os, subprocess
 import numpy as np
 from .config import DATA
 from .grid import first_beat

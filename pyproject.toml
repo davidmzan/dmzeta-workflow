@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dmzeta-workflow"
+version = "0.2.0"
+description = "Local DJ library-prep tool: rename, tag, beat-grid and cue-point tracks for Rekordbox, learning from your corrections."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+dev = ["ruff>=0.5", "mypy>=1.10"]
+
+[project.scripts]
+dmzeta-workflow = "workflow_server:main"
+dmzeta-workflow-cli = "djflow:cli"
+
+[tool.setuptools]
+py-modules = ["djflow", "workflow_server", "djflow_app"]
+packages = ["djcore"]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 200
+extend-exclude = ["backup", "cache", "history", "learned", "learned_cvox", "learned_marks"]
+
+[tool.ruff.lint]
+# El código usa un estilo denso a propósito (varias sentencias por línea): solo reglas de errores reales.
+select = ["E9", "F", "B006", "B008"]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["djcore", "workflow_server.py", "djflow.py"]
+ignore_missing_imports = true
+check_untyped_defs = false
+warn_unused_ignores = true

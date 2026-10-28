@@ -1,5 +1,5 @@
 """Regresión logística propia (NumPy), validación cruzada y carga de modelos entrenados."""
-import sys, os, re, csv, json, time, shutil, hashlib, subprocess
+import os
 import numpy as np
 from .config import CVOX_MODEL, GENRE_MODEL, MARKS_MODEL, MODEL_PATH, TYPES
 

@@ -23,9 +23,12 @@ for _m in _LAYERS:
     for _k, _v in vars(_mod).items():
         if not _k.startswith('__') and _k not in ('sys', 'os', 're', 'csv', 'json', 'time', 'shutil', 'hashlib', 'subprocess', 'np'):
             globals()[_k] = _v
-import os, re, json, time, shutil, subprocess, numpy as np          # algunos scripts antiguos esperan estos módulos en dj.*
 
 from djcore.commands import main
 
-if __name__ == '__main__':
+def cli():
     main(sys.argv, __doc__)
+
+
+if __name__ == '__main__':
+    cli()

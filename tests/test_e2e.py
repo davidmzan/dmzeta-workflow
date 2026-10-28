@@ -1,5 +1,5 @@
 """Flujo completo sobre audio sintético: analizar → revisar → aplicar (renombrar) → cues → deshacer."""
-import csv, json, os, shutil, subprocess, unittest
+import csv, os, subprocess, unittest
 from _common import dj, TMP, make_track, have_ffmpeg, tiny_xml
 
 
@@ -22,7 +22,7 @@ class EndToEndTest(unittest.TestCase):
         rows = list(csv.DictReader(open(review, newline='', encoding='utf-8-sig')))
         self.assertEqual(sorted(r['original'] for r in rows), sorted(n + '.mp3' for n in self.names))
         # revisión manual: damos un nombre final estándar a la primera pista y dejamos la segunda sin marcar
-        orig = sorted(os.listdir(self.folder)); first = rows[0]['original']
+        first = rows[0]['original']
         final = 'Cancion Revisada (8 Bars MOE) - 8A - 100'
         with open(review, 'w', newline='', encoding='utf-8-sig') as fh:
             w = csv.writer(fh); w.writerow(['original', 'proposed', 'confidence', 'flags', 'final', 'artist', 'reviewed', 'edit_final', 'checked'])

@@ -2,6 +2,7 @@
 
 ## Sin publicar
 
+- `pyproject.toml` (dependencias, comandos `dmzeta-workflow`, config de ruff y mypy), instalación en `.venv` aislado, CI con job de lint (ruff y mypy bloqueantes). Corregido: los errores de la ventana Tk no se mostraban (NameError en una lambda diferida).
 - Interfaz dividida en `ui/` (index.html + 6 css + 11 js), servida por una ruta estática restringida; CSP sin scripts inline de terceros.
 - Aprendizaje ponderado: correcciones tuyas x3, aceptadas x0.5, sin revisar no se aprende; registro de reentrenos y panel de calidad (`/api/quality`).
 - Pruebas de interfaz (`tests/test_ui.py`, `tests/ui_smoke.js`): 49 en total.

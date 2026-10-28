@@ -1,5 +1,5 @@
 """Reglas de cues aprendidas y exportación del XML de Rekordbox."""
-import sys, os, re, csv, json, time, shutil, hashlib, subprocess
+import os, re, subprocess
 import numpy as np
 from .config import CAT_HEX, EXT, LIME_C, RED_C
 from .storage import _pref, atomic_write_text, load_marks
@@ -70,7 +70,6 @@ def cmd_cues(xml_path, folder, only=None, offset_ms=0):
         eo = ((mp3_delay(path) + float(offset_ms or 0) / 1000.0) if f.lower().endswith('.mp3') else 0.0)           # desfase de exportación (compensa el que añada Rekordbox al leer el archivo)
         def at(b): return t0 + eo + b * bar
         def col(c): return f' Red="{c[0]}" Green="{c[1]}" Blue="{c[2]}"' if c else ''
-        M = X.get('mem', {})
         marks = []
         st = mk.get('start'); en = mk.get('end'); hot_o = mk.get('hot') or {}; ma = mk.get('memAuto') or {}
         if mk.get('noIntro'): ma = dict(ma, intro=False)

@@ -1,5 +1,5 @@
 """Decodificación, espectrograma, matrices por compás y utilidades de audio."""
-import sys, os, re, csv, json, time, shutil, hashlib, subprocess
+import os, hashlib, subprocess
 import numpy as np
 from .config import CACHE_DIR, FR, HOP, N_FFT, SR
 from .names import parse_name

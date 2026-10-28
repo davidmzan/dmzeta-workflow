@@ -1,5 +1,5 @@
 """Beat grid: detección de fase y BPM, golpe fuerte, inicio del ataque y retraso del MP3."""
-import sys, os, re, csv, json, time, shutil, hashlib, subprocess
+import os, hashlib, subprocess
 import numpy as np
 from .config import CAL, GRID_CACHE, GRID_HOP, GRID_N, SR
 from .storage import load_prefs
@@ -35,7 +35,7 @@ def _strong_shift(y, t0, bpm, nmax=12):
     except Exception: pass
     return 0
 
-_DELAY = {}
+_DELAY: dict = {}
 
 def mp3_delay(path):
     """Segundos que Rekordbox ve el MP3 más tarde que yo. ffmpeg recorta el retardo del codificador (start_time ~25 ms) en los MP3 con cabecera LAME

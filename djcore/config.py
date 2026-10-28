@@ -1,5 +1,5 @@
 """Rutas, constantes y parámetros compartidos. Es la única capa que no importa ninguna otra."""
-import sys, os, re, csv, json, time, shutil, hashlib, subprocess
+import os
 import numpy as np
 
 SR = 22050; N_FFT = 2048; HOP = 512

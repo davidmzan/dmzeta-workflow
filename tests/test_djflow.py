@@ -1,6 +1,6 @@
 """Pruebas de regresión de Dmzeta Workflow.  Ejecuta:  python3 -m unittest discover -s tests -v
 No tocan tus datos: todo (cachés, modelos, marcas) va a una carpeta temporal. Necesitan ffmpeg (el mismo que usa la app)."""
-import json, os, re, shutil, subprocess, sys, unittest
+import json, os, subprocess, unittest
 import xml.etree.ElementTree as ET
 import numpy as np
 from _common import dj, TMP, ROOT, make_track, have_ffmpeg, tiny_xml

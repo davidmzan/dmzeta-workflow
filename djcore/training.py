@@ -1,5 +1,5 @@
 """Entrenamiento y aprendizaje automático a partir de tu colección y de tus correcciones."""
-import sys, os, re, csv, json, time, shutil, hashlib, subprocess
+import os, re, shutil, hashlib
 import numpy as np
 from .config import CANDS, CVOX_MODEL, DATA, EXT, GENRE_MODEL, HEX_CAT, LEARN_CVOX_DIR, LEARN_DIR, LEARN_MARKS_DIR, LEARN_META_DIR, LIME_C, MARKS_MODEL, MODEL_PATH, PREFS_FILE, RED_C, START_KS_MAX, W_CORRECTED
 from .storage import _pref, atomic_savez, atomic_write_json, learn_weight, load_marks, load_prefs, log_model
@@ -123,7 +123,7 @@ def cmd_train_marks(xml_path, limit=1200):
     for j, (A, target, wt, N) in enumerate(learned):
         ti = len(items) + j; TG.append(target); ks_, XX = start_X(A, N)
         for k, xr in zip(ks_, XX): X.append(xr); y.append(int(k == target)); t.append(ti); W.append(wt)
-    X = np.array(X); P = cv_predict(X, y, t, [0, 1], w=W); ya = np.array(y); ex = w4 = w8 = tot = 0; ks_all = {}
+    X = np.array(X); P = cv_predict(X, y, t, [0, 1], w=W); ex = w4 = w8 = tot = 0
     for ti in sorted(set(t)):
         sel = np.array(t) == ti; pk = P[sel][:, 1]
         if pk.sum() == 0: continue
@@ -160,7 +160,7 @@ def train_cvox(xml_path=None, min_n=20):
     log_model('cvox', n=int(len(y)), n_user=int((W >= W_CORRECTED).sum()), accuracy=round(acc, 3), baseline=round(float(base), 3), enabled=bool(ok))
     open(os.path.join(DATA, 'informe_cvox.md'), 'w', encoding='utf-8').write('\n'.join(rep) + '\n'); print('\n' + '\n'.join(rep))
 
-_GEN_CACHE = {}
+_GEN_CACHE: dict = {}
 
 def xml_genres(xml_path):
     """Géneros de tu colección, del más al menos usado (para el desplegable)."""

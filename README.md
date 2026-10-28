@@ -71,15 +71,15 @@ Known gaps: Rekordbox ignores memory-cue colours and the *active loop* flag when
 
 ```bash
 # macOS, Python 3.9+, ffmpeg (brew install ffmpeg)
-pip3 install numpy
-python3 workflow_server.py        # opens the app in your browser
+python3 -m venv .venv && .venv/bin/pip install -e .
+.venv/bin/dmzeta-workflow          # opens the app in your browser
 ```
 
 1. Pick the folder with new tracks and your `rekordbox.xml` (**Settings**).
 2. **Analyse**, review on the waveform, **Apply + generate cues**.
 3. Import `djflow_cues.xml` in Rekordbox (*rekordbox xml* view).
 
-`instalar_djflow.command` creates a double-clickable macOS app.
+`instalar_djflow.command` does the same (isolated `.venv`, dependencies from `pyproject.toml`) and creates a double-clickable macOS app.
 
 ## Tests
 
@@ -96,7 +96,7 @@ Forty-nine tests run in about fifteen seconds on synthetic audio, in a throw-awa
 - **UI tests**: `index.html` references exactly the CSS/JS files on disk, each script parses, the static route rejects traversal, and a Node harness boots the whole UI in demo mode with a stubbed DOM.
 - **Static guards**: no undefined names in any module, layers import only from lower layers, no personal data tracked by git.
 
-A `pre-commit` hook and GitHub Actions run the same suite; `./guardar_version.command "message"` commits only when it passes.
+A `pre-commit` hook and GitHub Actions run the same suite plus `ruff` (undefined names, unused imports) and `mypy`; `./guardar_version.command "message"` commits only when it passes.
 
 ## Repository layout
 

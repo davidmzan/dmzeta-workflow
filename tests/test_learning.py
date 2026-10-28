@@ -1,5 +1,5 @@
 """Aprendizaje: lo corregido pesa más que lo aceptado, lo no revisado no se aprende, y cada reentrenamiento queda anotado."""
-import json, os, shutil, unittest
+import os, shutil, unittest
 import numpy as np
 from _common import dj, TMP, make_track, have_ffmpeg
 import djcore.training as training

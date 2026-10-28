@@ -1,5 +1,4 @@
 """Vectores de características para los modelos."""
-import sys, os, re, csv, json, time, shutil, hashlib, subprocess
 import numpy as np
 from .config import CANDS, NF, START_KS_MAX
 
@@ -29,7 +28,7 @@ def start_X(A, N=0):
     """Candidatos a START MIX con características de ESTRUCTURA: ordinal del subidón de energía (¿es el 1.º, 2.º…?), parecido con secciones anteriores (el 2.º coro repite al 1.º) y distancia al final del extender."""
     ks = start_candidates(A)
     if not ks: return [], np.zeros((0, 1))
-    Z = (A - A.mean(0)) / (A.std(0) + 1e-6); n = len(Z); e = Z[:, :3].mean(1); v = Z[:, 3]
+    Z = (A - A.mean(0)) / (A.std(0) + 1e-6); e = Z[:, :3].mean(1); v = Z[:, 3]
     def rise(j, col):
         a, b = col[max(j - 4, 0):j], col[j:j + 4]
         return float(b.mean() - a.mean()) if len(a) and len(b) else 0.0

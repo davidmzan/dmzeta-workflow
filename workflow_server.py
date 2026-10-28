@@ -5,14 +5,14 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 import djflow as dj
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CFG = os.path.join(dj.DATA, 'config.json')
+CFG = os.path.join(dj.DATA, 'config.json')  # type: ignore[attr-defined]  # la fachada copia los nombres en tiempo de ejecución
 UI_DIR = os.path.join(HERE, 'ui')
 UI = os.path.join(UI_DIR, 'index.html')
 PING = [0.0]
 TOKEN = secrets.token_urlsafe(24)           # token de sesión: solo la página que sirve este servidor lo conoce (evita que otra web lance acciones contra el servidor local)
 MAX_BODY = 10 * 1024 * 1024                  # tope de cuerpo de las peticiones
 MAX_JOBS = 40
-LOCAL = threading.local(); JOBS = {}; JOB_LOCK = threading.Lock(); ALLOWED = set()
+LOCAL = threading.local(); JOBS: dict = {}; JOB_LOCK = threading.Lock(); ALLOWED: set = set()
 
 def load_cfg():
     try: c = json.load(open(CFG, encoding='utf-8'))
@@ -59,7 +59,7 @@ class Tee(io.TextIOBase):
         return len(t)
     def flush(s): pass
 
-RULES_CACHE = {}
+RULES_CACHE: dict = {}
 
 def new_examples():
     try:
@@ -316,7 +316,7 @@ def already_running():
         except Exception: pass
     return None
 
-if __name__ == '__main__':
+def main():
     sys.stdout = Tee(sys.__stdout__); sys.stderr = Tee(sys.__stderr__)
     for _p in [load_cfg().get('folder', '')] + list(load_cfg().get('train', [])):
         if _p and os.path.isdir(_p): ALLOWED.add(os.path.normpath(_p))
@@ -329,3 +329,6 @@ if __name__ == '__main__':
     if '--no-open' not in sys.argv: threading.Timer(0.6, lambda: open_window(url)).start()
     try: srv.serve_forever()
     except KeyboardInterrupt: pass
+
+
+if __name__ == '__main__': main()

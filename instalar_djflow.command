@@ -8,7 +8,10 @@ if ! command -v ffmpeg >/dev/null; then
   if command -v brew >/dev/null; then echo "Instalando ffmpeg..."; brew install ffmpeg
   else echo "Falta ffmpeg. Instala Homebrew (brew.sh) y luego ejecuta: brew install ffmpeg"; fi
 fi
-python3 -c "import numpy" 2>/dev/null || python3 -m pip install numpy || python3 -m pip install --break-system-packages numpy
+# Entorno aislado: no toca el Python del sistema y fija las dependencias de pyproject.toml
+[ -x .venv/bin/python ] || python3 -m venv .venv || { echo "No se pudo crear .venv"; exit 1; }
+.venv/bin/python -m pip install --quiet --upgrade pip
+.venv/bin/python -m pip install --quiet -e . || { echo "Falló la instalación de dependencias"; exit 1; }
 
 rm -rf "$HOME/Desktop/DJFlow.app"
 APP="$HOME/Desktop/Dmzeta Workflow.app"
@@ -26,7 +29,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <key>LSUIElement</key><false/>
 </dict></plist>
 PLIST
-PYBIN="$(python3 -c 'import sys;print(sys.executable)')"
+PYBIN="$DIR/.venv/bin/python"
 echo "Python usado: $PYBIN"
 cat > "$APP/Contents/MacOS/djflow" <<LAUNCH
 #!/bin/zsh

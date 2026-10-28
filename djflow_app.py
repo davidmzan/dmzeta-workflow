@@ -281,7 +281,7 @@ class App(tk.Tk):
         def job():
             try:
                 y, sr = dj.load_wave(path); bpm0 = p['bpm'] or dj.track_bpm_key(path)[0]; t0, bpm, _sc = dj.detect_grid(path, bpm0) if bpm0 else (0.052, 0, 0)
-            except Exception as e: return s.after(0, lambda: messagebox.showerror('Dmzeta Workflow', str(e)))
+            except Exception as e: return s.after(0, lambda msg=str(e): messagebox.showerror('Dmzeta Workflow', msg))
             def go():
                 if s.cur and s.cur[0] == path: s.loaded = (path, y, sr, t0, bpm); s.wave.set_track(y, sr, t0, bpm, p['bars']); s.apply_marks_to_wave()
             s.after(0, go)
@@ -323,7 +323,7 @@ class App(tk.Tk):
         dur = max(1.0, min(dur, w.dur - start)); path = s.cur[0]; s.mark_seen(); s.stop(); s.status.set('Preparando audio…'); s.dot.config(fg=WARN)
         def job():
             try: wav = dj.make_clip(path, w.bpm, w.bars, start, dur, s.clicks_on, w.t0)
-            except Exception as e: return s.after(0, lambda: messagebox.showerror('Dmzeta Workflow', str(e)))
+            except Exception as e: return s.after(0, lambda msg=str(e): messagebox.showerror('Dmzeta Workflow', msg))
             def go():
                 s.status.set('Listo'); s.dot.config(fg=OK); s.proc = subprocess.Popen(['afplay', wav]); s.play_t0 = (time.time(), start, dur); s.tick()
             s.after(0, go)
@@ -372,7 +372,7 @@ class App(tk.Tk):
         ea = tk.Entry(top, width=90, bg=PANEL, fg=TXT, insertbackground=TXT, bd=0, highlightthickness=1, highlightbackground=LINE, font=FONT); ea.insert(0, v[2]); ea.pack(padx=14, pady=(0, 6), ipady=6)
         row = tk.Frame(top, bg=CARD); row.pack(padx=14, pady=(0, 12), anchor='w')
         def add(t): e.insert('end', ' ' + t if not e.get().endswith(' ') else t)
-        def ok(_=None): changed = (v[1], v[2]) != tuple(s.tv.item(it, 'values')[1:3]); v[1] = e.get(); v[2] = ea.get(); s.tv.item(it, values=v); top.destroy(); s.mark_seen(it); s.select()
+        def ok(_=None): v[1] = e.get(); v[2] = ea.get(); s.tv.item(it, values=v); top.destroy(); s.mark_seen(it); s.select()
         for t in ('(Mashup)', '(In Aca)', '(In Hype)', '(Short Edit)', '(Aca Out)'):
             b = Btn(row, t, lambda t=t: add(t), False); b.pack(side='left', padx=(0, 6))
         Btn(row, 'Guardar', ok).pack(side='left', padx=(12, 0)); e.bind('<Return>', ok); ea.bind('<Return>', ok)

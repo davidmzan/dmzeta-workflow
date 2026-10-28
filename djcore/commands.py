@@ -1,6 +1,5 @@
 """Órdenes de alto nivel: analizar, aplicar, deshacer, limpiar y CLI."""
-import sys, os, re, csv, json, time, shutil, hashlib, subprocess
-import numpy as np
+import sys, os, csv, json, time, shutil, subprocess
 from .config import BACKUP_DIR, EXT, HIST_DIR, MARKS_MODEL
 from .storage import cmd_mark_done, load_marks, mark_done, save_marks
 from .names import normalize_artist, parse_name

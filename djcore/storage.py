@@ -1,5 +1,5 @@
 """Lectura y escritura de estado en disco (atómica): marcas, preferencias, registro de pistas ya procesadas."""
-import sys, os, re, csv, json, time, shutil, hashlib, subprocess
+import os, json, time
 import numpy as np
 from .config import DONE_FILE, EXT, MARKS_FILE, MODEL_LOG, PREFS_FILE
 

@@ -1,5 +1,5 @@
 """Predicciones con los modelos cargados: nombre, START MIX, color del C, género y duplicados."""
-import sys, os, re, csv, json, time, shutil, hashlib, subprocess
+import os, re
 import numpy as np
 from .config import CANDS, GENRE_MODEL, TYPES
 from .storage import _pref, is_done
