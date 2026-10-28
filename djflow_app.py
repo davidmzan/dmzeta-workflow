@@ -8,7 +8,7 @@ import djflow as dj
 BG, PANEL, CARD, LINE = '#0e0e11', '#16161b', '#1d1d24', '#2a2a33'
 TXT, MUTED, ACC, ACC2, OK, WARN = '#f2f2f5', '#9a9aa6', '#7c5cff', '#9b83ff', '#34d399', '#fbbf24'
 FONT, FB = ('Helvetica Neue', 12), ('Helvetica Neue', 12, 'bold')
-CFG = os.path.join(dj.HERE, 'config.json')
+CFG = os.path.join(dj.DATA, 'config.json')
 
 def load_cfg():
     try: return json.load(open(CFG, encoding='utf-8'))
@@ -343,7 +343,7 @@ class App(tk.Tk):
         if not s.cfg['train'] and not os.path.isdir(dj.LEARN_DIR): return messagebox.showinfo('Dmzeta Workflow', 'Primero añade al menos una carpeta.')
         ds = list(s.cfg['train'])
         def done():
-            try: messagebox.showinfo('Entrenado', open(os.path.join(dj.HERE, 'informe.md'), encoding='utf-8').read())
+            try: messagebox.showinfo('Entrenado', open(os.path.join(dj.DATA, 'informe.md'), encoding='utf-8').read())
             except Exception: pass
         s.bg('Aprendiendo…', lambda: dj.cmd_train(*ds), done)
 
@@ -410,7 +410,7 @@ class App(tk.Tk):
         if not s.cfg.get('xml'): return
         if not messagebox.askyesno('Aprender START MIX', 'Lee tus pistas del rekordbox.xml que ya tienen START MIX y analiza su audio (los archivos deben estar donde dice el XML).\nLa primera vez puede tardar 20-40 minutos; después usa caché.\n\n¿Empezar?'): return
         def done():
-            try: messagebox.showinfo('START MIX aprendido', open(os.path.join(dj.HERE, 'informe_marks.md'), encoding='utf-8').read())
+            try: messagebox.showinfo('START MIX aprendido', open(os.path.join(dj.DATA, 'informe_marks.md'), encoding='utf-8').read())
             except Exception: pass
         s.bg('Aprendiendo START MIX…', lambda: dj.cmd_train_marks(s.cfg['xml']), done)
 

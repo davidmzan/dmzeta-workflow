@@ -1,36 +1,9 @@
 """Pruebas de regresión de Dmzeta Workflow.  Ejecuta:  python3 -m unittest discover -s tests -v
 No tocan tus datos: todo (cachés, modelos, marcas) va a una carpeta temporal. Necesitan ffmpeg (el mismo que usa la app)."""
-import json, os, re, shutil, subprocess, sys, tempfile, unittest, wave
+import json, os, re, shutil, subprocess, sys, unittest
 import xml.etree.ElementTree as ET
 import numpy as np
-
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
-import djflow as dj
-
-TMP = tempfile.mkdtemp(prefix='djflow_test_')
-for attr, name in (('GRID_CACHE', 'cache'), ('CACHE_DIR', 'cache2'), ('LEARN_DIR', 'learned'), ('LEARN_MARKS_DIR', 'learned_marks'), ('LEARN_CVOX_DIR', 'learned_cvox'),
-                   ('HIST_DIR', 'history'), ('BACKUP_DIR', 'backup')):
-    if hasattr(dj, attr): setattr(dj, attr, os.path.join(TMP, name))
-for attr, name in (('DONE_FILE', 'done.json'), ('PREFS_FILE', 'prefs.json'), ('MODEL_PATH', 'model.npz'), ('MARKS_MODEL', 'model_marks.npz'),
-                   ('CVOX_MODEL', 'model_cvox2.npz'), ('GENRE_MODEL', 'model_genre.npz')):
-    if hasattr(dj, attr): setattr(dj, attr, os.path.join(TMP, name))
-dj.HERE = TMP
-
-
-def make_track(path, bpm=120.0, first=0.37, seconds=40, sr=44100):
-    """Pista sintética: bombos (golpes con ataque seco) en cada beat desde `first`."""
-    n = int(seconds * sr); y = np.zeros(n, dtype=np.float64); beat = 60.0 / bpm; t = np.arange(int(0.18 * sr)) / sr
-    kick = np.sin(2 * np.pi * (60 + 90 * np.exp(-t * 40)) * t) * np.exp(-t * 14)
-    k = 0
-    while first + k * beat < seconds - 0.3:
-        i = int((first + k * beat) * sr); y[i:i + len(kick)] += kick[:n - i]; k += 1
-    y += np.random.RandomState(1).randn(n) * 0.003
-    y = (y / np.abs(y).max() * 0.8 * 32767).astype('<i2')
-    with wave.open(path, 'wb') as w: w.setnchannels(1); w.setsampwidth(2); w.setframerate(sr); w.writeframes(y.tobytes())
-
-
-def have_ffmpeg(): return shutil.which('ffmpeg') is not None
+from _common import dj, TMP, ROOT, make_track, have_ffmpeg, tiny_xml
 
 
 class NamesTest(unittest.TestCase):
@@ -90,16 +63,6 @@ class GridTest(unittest.TestCase):
         d = dj.mp3_delay(m); self.assertTrue(0.0 <= d < 0.08, d)
 
 
-def tiny_xml(path):
-    """XML mínimo con 25 pistas con cues, suficiente para que se aprendan las reglas A/B/C."""
-    rows = []
-    for i in range(25):
-        rows.append(f'<TRACK TrackID="{i}" Name="Song {i} (8 Bars MOE) - 8A - 120" Artist="A" AverageBpm="120.00" Location="file://localhost/x/{i}.mp3">'
-                    '<POSITION_MARK Name="" Type="0" Start="0.050" Num="0" Red="40" Green="226" Blue="20"/><POSITION_MARK Name="" Type="0" Start="8.050" Num="1" Red="40" Green="226" Blue="20"/>'
-                    '<POSITION_MARK Name="" Type="0" Start="16.050" Num="2" Red="165" Green="225" Blue="22"/></TRACK>')
-    open(path, 'w').write('<DJ_PLAYLISTS><COLLECTION Entries="25">' + ''.join(rows) + '</COLLECTION></DJ_PLAYLISTS>')
-
-
 @unittest.skipUnless(have_ffmpeg(), 'falta ffmpeg')
 class CuesXmlTest(unittest.TestCase):
     @classmethod
@@ -136,6 +99,15 @@ class CuesXmlTest(unittest.TestCase):
         loop = [p for p in mem if p.get('Name') == 'END LOOP'][0]
         self.assertEqual(loop.get('Type'), '4'); self.assertGreater(float(loop.get('End')), float(loop.get('Start')))
 
+    def test_golden_snapshot(self):
+        """Foto completa de los cues exportados: si cambia algo (posición, color, nombre, tipo), la prueba avisa. Para aceptar un cambio a propósito: UPDATE_GOLDEN=1."""
+        snap = dict(track={k: self.t.get(k) for k in ('Name', 'Genre', 'Grouping', 'Colour', 'Rating', 'Comments', 'AverageBpm', 'Tonality')},
+                    marks=sorted([[p.get('Num'), p.get('Type'), p.get('Name'), p.get('Start'), p.get('End'), p.get('Red'), p.get('Green'), p.get('Blue')] for p in self.t.findall('POSITION_MARK')], key=lambda m: (int(m[0]), m[1], m[3])),
+                    tempo=[dict(x.attrib) for x in self.t.findall('TEMPO')])
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'golden', 'cues.json'); os.makedirs(os.path.dirname(path), exist_ok=True)
+        if os.environ.get('UPDATE_GOLDEN') or not os.path.exists(path): json.dump(snap, open(path, 'w', encoding='utf-8'), indent=1, ensure_ascii=False)
+        self.assertEqual(snap, json.load(open(path, encoding='utf-8')))
+
     def test_offset_only_mp3(self):
         dj.cmd_cues(self.xml, self.folder, offset_ms=40)
         t = ET.parse(os.path.join(self.folder, 'djflow_cues.xml')).getroot().find('COLLECTION').findall('TRACK')[0]
@@ -151,7 +123,7 @@ class ModelTest(unittest.TestCase):
         self.assertTrue(np.allclose(m.proba(X), m2.proba(X))); self.assertGreater(np.mean(np.array(m.classes)[m.proba(X).argmax(1)] == y), 0.5)
 
     def test_cvox_needs_samples_and_gate(self):
-        dj.LEARN_CVOX_DIR = os.path.join(TMP, 'lc'); os.makedirs(dj.LEARN_CVOX_DIR, exist_ok=True)
+        os.makedirs(dj.LEARN_CVOX_DIR, exist_ok=True)
         dj.train_cvox(); self.assertFalse(os.path.exists(dj.CVOX_MODEL))      # con pocas pistas no se entrena
         rs = np.random.RandomState(0)
         for i in range(30):

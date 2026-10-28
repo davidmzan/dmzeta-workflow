@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Dmzeta Workflow · interfaz web local. Uso: python3 workflow_server.py  (abre el navegador solo)."""
-import os, sys, io, re, csv, json, time, socket, threading, subprocess, webbrowser, mimetypes, urllib.parse
+import os, sys, io, re, csv, json, time, socket, threading, subprocess, webbrowser, mimetypes, secrets, urllib.parse
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 import djflow as dj
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CFG = os.path.join(HERE, 'config.json')
+CFG = os.path.join(dj.DATA, 'config.json')
 UI = os.path.join(HERE, 'workflow_ui.html')
 PING = [0.0]
+TOKEN = secrets.token_urlsafe(24)           # token de sesión: solo la página que sirve este servidor lo conoce (evita que otra web lance acciones contra el servidor local)
+MAX_BODY = 10 * 1024 * 1024                  # tope de cuerpo de las peticiones
+MAX_JOBS = 40
 LOCAL = threading.local(); JOBS = {}; JOB_LOCK = threading.Lock(); ALLOWED = set()
 
 def load_cfg():
@@ -16,8 +19,29 @@ def load_cfg():
     c.setdefault('train', []); c.setdefault('xml', ''); c.setdefault('folder', ''); c.setdefault('backup', True); c.setdefault('auto_learn', True); c.setdefault('export_offset_ms', 0); c.setdefault('auto_n', 10); return c
 
 def save_cfg(c):
-    try: json.dump(c, open(CFG, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+    try: dj.atomic_write_json(CFG, c, indent=1)
     except Exception: pass
+
+def clean_cfg(upd, cur):
+    """Solo claves conocidas y con el tipo y rango correctos; lo demás se ignora."""
+    out = {}
+    for k, v in upd.items():
+        if k not in cur: continue
+        if k in ('backup', 'auto_learn'): out[k] = bool(v)
+        elif k == 'export_offset_ms':
+            try: out[k] = max(-200.0, min(200.0, float(v)))
+            except (TypeError, ValueError): pass
+        elif k == 'auto_n':
+            try: out[k] = max(1, min(500, int(v)))
+            except (TypeError, ValueError): pass
+        elif k == 'xml':
+            if v == '' or (isinstance(v, str) and v.lower().endswith('.xml')): out[k] = v
+        elif k == 'folder':
+            if isinstance(v, str) and (v == '' or os.path.isdir(v)): out[k] = v
+        elif k == 'train':
+            if isinstance(v, list) and all(isinstance(x, str) for x in v): out[k] = v
+        else: out[k] = v
+    return out
 
 class Tee(io.TextIOBase):
     def __init__(s, orig): s.orig = orig
@@ -33,7 +57,6 @@ class Tee(io.TextIOBase):
             if m: j['progress'] = int(m.group(1)) / max(int(m.group(2)), 1)
         return len(t)
     def flush(s): pass
-sys.stdout = Tee(sys.__stdout__); sys.stderr = Tee(sys.__stderr__)
 
 RULES_CACHE = {}
 
@@ -46,7 +69,10 @@ def new_examples():
 
 def run_job(title, fn):
     jid = str(int(time.time() * 1000)); job = dict(id=jid, title=title, status='running', log=[], progress=None, error=None, result=None, t=time.time())
-    with JOB_LOCK: JOBS[jid] = job
+    with JOB_LOCK:
+        JOBS[jid] = job
+        for old in sorted(JOBS, key=lambda k: JOBS[k]['t'])[:-MAX_JOBS]:
+            if JOBS[old]['status'] != 'running': JOBS.pop(old, None)
     def go():
         LOCAL.job = job
         try: job['result'] = fn()
@@ -54,10 +80,14 @@ def run_job(title, fn):
         if job['status'] != 'error': job['status'] = 'done'; job['progress'] = 1.0
     threading.Thread(target=go, daemon=True).start(); return jid
 
+def folder_ok(folder):
+    """La carpeta debe existir y haberla elegido tú (selector, carpeta guardada o de entrenamiento)."""
+    return isinstance(folder, str) and bool(folder) and os.path.isdir(folder) and os.path.normpath(folder) in ALLOWED
+
 def safe_path(folder, name):
+    if not folder_ok(folder) or not isinstance(name, str) or '/' in name or '\\' in name or name in ('', '.', '..') or '\x00' in name: return None
     p = os.path.normpath(os.path.join(folder, name))
-    if os.path.dirname(p) != os.path.normpath(folder) or not os.path.exists(p) or not p.lower().endswith(dj.EXT): return None
-    if os.path.normpath(folder) not in ALLOWED: return None
+    if os.path.dirname(p) != os.path.normpath(folder) or not os.path.isfile(p) or not p.lower().endswith(dj.EXT): return None
     return p
 
 def read_review(folder):
@@ -96,15 +126,40 @@ class H(BaseHTTPRequestHandler):
     def send_json(s, obj, code=200):
         b = json.dumps(obj, ensure_ascii=False).encode('utf-8'); s.send_response(code); s.send_header('Content-Type', 'application/json; charset=utf-8'); s.send_header('Content-Length', str(len(b))); s.send_header('Cache-Control', 'no-store'); s.end_headers(); s.wfile.write(b)
     def body(s):
-        n = int(s.headers.get('Content-Length') or 0); return json.loads(s.rfile.read(n).decode('utf-8') or '{}') if n else {}
+        n = int(s.headers.get('Content-Length') or 0)
+        if n < 0 or n > MAX_BODY: raise ValueError('cuerpo demasiado grande')
+        d = json.loads(s.rfile.read(n).decode('utf-8') or '{}') if n else {}
+        if not isinstance(d, dict): raise ValueError('cuerpo no válido')
+        return d
     def host_ok(s): return (s.headers.get('Host') or '').split(':')[0] in ('127.0.0.1', 'localhost')
 
+    CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+
+    def end_headers(s):
+        s.send_header('X-Content-Type-Options', 'nosniff'); s.send_header('X-Frame-Options', 'DENY'); s.send_header('Referrer-Policy', 'no-referrer')
+        s.send_header('Content-Security-Policy', s.CSP); s.send_header('Cross-Origin-Resource-Policy', 'same-origin')
+        super().end_headers()
+
+    def origin_ok(s):
+        """Rechaza peticiones que vengan de otra web (CSRF): el origen, si existe, debe ser este mismo servidor."""
+        o = s.headers.get('Origin')
+        if o:
+            host = urllib.parse.urlparse(o).netloc
+            if host != (s.headers.get('Host') or ''): return False
+        sf = s.headers.get('Sec-Fetch-Site')
+        return sf in (None, '', 'same-origin', 'none')
+
+    def authed(s, path):
+        if path in ('/', '/index.html', '/api/ping'): return True
+        return secrets.compare_digest(s.headers.get('X-WF-Token') or '', TOKEN)
+
     def do_GET(s):
-        if not s.host_ok(): return s.send_error(403)
+        if not s.host_ok() or not s.origin_ok(): return s.send_error(403)
         u = urllib.parse.urlparse(s.path); q = {k: v[0] for k, v in urllib.parse.parse_qs(u.query).items()}
+        if not s.authed(u.path): return s.send_error(401)
         try:
             if u.path in ('/', '/index.html'):
-                b = open(UI, 'rb').read(); s.send_response(200); s.send_header('Content-Type', 'text/html; charset=utf-8'); s.send_header('Content-Length', str(len(b))); s.send_header('Cache-Control', 'no-store'); s.end_headers(); s.wfile.write(b); return
+                b = open(UI, 'rb').read().replace(b'__WF_TOKEN__', TOKEN.encode()); s.send_response(200); s.send_header('Content-Type', 'text/html; charset=utf-8'); s.send_header('Content-Length', str(len(b))); s.send_header('Cache-Control', 'no-store'); s.end_headers(); s.wfile.write(b); return
             if u.path == '/api/ping': PING[0] = time.time(); return s.send_json(dict(ok=True))
             if u.path == '/api/state':
                 c = load_cfg(); h = dj.last_history(); return s.send_json(dict(genres=dj.xml_genres(c.get('xml', '')), genre_model=os.path.exists(dj.GENRE_MODEL), cfg=c, model=os.path.exists(dj.MODEL_PATH), marks_model=os.path.exists(dj.MARKS_MODEL), undo=bool(h), learned=len(os.listdir(dj.LEARN_DIR)) if os.path.isdir(dj.LEARN_DIR) else 0, new_examples=new_examples(), new_marks=dj._newer(dj.LEARN_MARKS_DIR, dj.MARKS_MODEL), loop_len=dj._pref('loops', 8), grid_bias_ms=round(dj.grid_bias() * 1000), grid_samples=len(dj.load_prefs().get('grid') or [])))
@@ -118,15 +173,18 @@ class H(BaseHTTPRequestHandler):
                     base.update(RULES_CACHE[key]); base['gap'] = dj._pref('gaps', base.get('end', 8))
                 return s.send_json(base)
             if u.path == '/api/folder':
-                f = q.get('folder', ''); ALLOWED.add(os.path.normpath(f))
-                fs = [x for x in os.listdir(f) if x.lower().endswith(dj.EXT)] if os.path.isdir(f) else []
+                f = q.get('folder', '')
+                if not folder_ok(f): return s.send_json(dict(error='carpeta no permitida'), 403)
+                fs = [x for x in os.listdir(f) if x.lower().endswith(dj.EXT)]
                 done = sum(1 for x in fs if dj.is_done(os.path.join(f, x))); cx = os.path.join(f, 'djflow_cues.xml'); nc = 0
                 if os.path.exists(cx):
                     try: nc = open(cx, encoding='utf-8').read().count('<TRACK TrackID=')
                     except Exception: pass
                 return s.send_json(dict(total=len(fs), done=done, pending=len(fs) - done, cues=nc, analyzed=os.path.exists(os.path.join(f, 'review.csv'))))
             if u.path == '/api/review':
-                f = q.get('folder', ''); ALLOWED.add(os.path.normpath(f)); return s.send_json(dict(rows=read_review(f)))
+                f = q.get('folder', '')
+                if not folder_ok(f): return s.send_json(dict(error='carpeta no permitida'), 403)
+                return s.send_json(dict(rows=read_review(f)))
             if u.path == '/api/job':
                 j = JOBS.get(q.get('id')); return s.send_json(dict(j, log=j['log'][-60:]) if j else dict(status='missing'))
             if u.path == '/api/track':
@@ -143,7 +201,11 @@ class H(BaseHTTPRequestHandler):
                 if not p: return s.send_error(404)
                 size = os.path.getsize(p); ct = mimetypes.guess_type(p)[0] or 'audio/mpeg'; rng = s.headers.get('Range'); start, end = 0, size - 1
                 if rng and rng.startswith('bytes='):
-                    a, _, b = rng[6:].partition('-'); start = int(a or 0); end = int(b) if b else size - 1
+                    a, _, b = rng[6:].partition('-')
+                    try: start = int(a or 0); end = int(b) if b else size - 1
+                    except ValueError: return s.send_error(416)
+                    end = min(end, size - 1)
+                    if start < 0 or start > end: return s.send_error(416)
                 s.send_response(206 if rng else 200); s.send_header('Content-Type', ct); s.send_header('Accept-Ranges', 'bytes'); s.send_header('Content-Length', str(end - start + 1))
                 if rng: s.send_header('Content-Range', f'bytes {start}-{end}/{size}')
                 s.end_headers()
@@ -161,35 +223,53 @@ class H(BaseHTTPRequestHandler):
             except Exception: pass
 
     def do_POST(s):
-        if not s.host_ok(): return s.send_error(403)
+        if not s.host_ok() or not s.origin_ok(): return s.send_error(403)
         u = urllib.parse.urlparse(s.path)
+        if not s.authed(u.path): return s.send_error(401)
+        if (s.headers.get('Content-Type') or '').split(';')[0].strip() != 'application/json': return s.send_error(415)
         try:
             d = s.body(); c = load_cfg()
-            if u.path == '/api/cfg': c.update({k: v for k, v in d.items() if k in c}); save_cfg(c); return s.send_json(dict(cfg=c))
+            if u.path == '/api/cfg':
+                c.update(clean_cfg(d, c)); save_cfg(c)
+                for _p in [c.get('folder', '')] + list(c.get('train', [])):
+                    if _p and os.path.isdir(_p): ALLOWED.add(os.path.normpath(_p))
+                return s.send_json(dict(cfg=c))
             if u.path == '/api/pick':
                 p = pick(d.get('kind', 'folder'))
                 if p:
                     if d.get('kind') == 'folder': ALLOWED.add(os.path.normpath(p))
                 return s.send_json(dict(path=p))
             if u.path == '/api/analyze':
-                f = d['folder']; ALLOWED.add(os.path.normpath(f)); c['folder'] = f; save_cfg(c)
+                f = d['folder']
+                if not folder_ok(f): return s.send_json(dict(error='carpeta no permitida'), 403)
+                c['folder'] = f; save_cfg(c)
                 return s.send_json(dict(job=run_job('Analizando', lambda: dj.cmd_analyze(f, c.get('xml') or None))))
             if u.path == '/api/review':
-                f = d['folder']; ALLOWED.add(os.path.normpath(f)); write_review(f, d['rows'], d.get('marks')); return s.send_json(dict(ok=True))
+                f = d['folder']
+                if not folder_ok(f): return s.send_json(dict(error='carpeta no permitida'), 403)
+                write_review(f, d['rows'], d.get('marks')); return s.send_json(dict(ok=True))
             if u.path == '/api/apply':
-                f = d['folder']; ALLOWED.add(os.path.normpath(f)); write_review(f, d['rows'], d.get('marks')); bk = bool(d.get('backup', True))
+                f = d['folder']
+                if not folder_ok(f): return s.send_json(dict(error='carpeta no permitida'), 403)
+                write_review(f, d['rows'], d.get('marks')); bk = bool(d.get('backup', True))
                 def job():
                     dj.cmd_apply(f, bk)
-                    if d.get('cues') and c.get('xml'): dj.cmd_cues(c['xml'], f, only=dj.LAST_APPLIED, offset_ms=c.get('export_offset_ms', 0))
+                    if d.get('cues') and c.get('xml'): dj.cmd_cues(c['xml'], f, only=dj.get_last_applied(), offset_ms=c.get('export_offset_ms', 0))
                     if c.get('auto_learn', True): dj.auto_learn(c.get('xml', ''), c.get('train', []), c.get('auto_n', 10))
                 return s.send_json(dict(job=run_job('Aplicando', job)))
             if u.path == '/api/cues':
-                f = d['folder']; return s.send_json(dict(job=run_job('Generando cues', lambda: dj.cmd_cues(c['xml'], f, offset_ms=c.get('export_offset_ms', 0)))))
-            if u.path == '/api/undo': return s.send_json(dict(job=run_job('Deshaciendo', lambda: dj.cmd_undo(d.get('folder') or None))))
-            if u.path == '/api/train': return s.send_json(dict(job=run_job('Entrenando', lambda: (dj.cmd_train(*c['train']), open(os.path.join(HERE, 'informe.md'), encoding='utf-8').read())[1])))
+                f = d['folder']
+                if not folder_ok(f): return s.send_json(dict(error='carpeta no permitida'), 403)
+                return s.send_json(dict(job=run_job('Generando cues', lambda: dj.cmd_cues(c['xml'], f, offset_ms=c.get('export_offset_ms', 0)))))
+            if u.path == '/api/undo':
+                if d.get('folder') and not folder_ok(d['folder']): return s.send_json(dict(error='carpeta no permitida'), 403)
+                return s.send_json(dict(job=run_job('Deshaciendo', lambda: dj.cmd_undo(d.get('folder') or None))))
+            if u.path == '/api/train': return s.send_json(dict(job=run_job('Entrenando', lambda: (dj.cmd_train(*c['train']), open(os.path.join(dj.DATA, 'informe.md'), encoding='utf-8').read())[1])))
             if u.path == '/api/train_marks': return s.send_json(dict(job=run_job('Aprendiendo START MIX', lambda: (None, dj.learn_from_xml(c['xml']))[1])))
             if u.path == '/api/reveal':
-                subprocess.Popen(['open', '-R', d['path']] if os.path.exists(d.get('path', '')) else ['true']); return s.send_json(dict(ok=True))
+                p = os.path.abspath(d.get('path', '')) if isinstance(d.get('path'), str) else ''
+                if p and os.path.exists(p) and any(p == a or p.startswith(a + os.sep) for a in ALLOWED): subprocess.Popen(['open', '-R', p])
+                return s.send_json(dict(ok=True))
             s.send_error(404)
         except Exception as e:
             s.send_json(dict(error=str(e)), 500)
@@ -225,6 +305,9 @@ def already_running():
     return None
 
 if __name__ == '__main__':
+    sys.stdout = Tee(sys.__stdout__); sys.stderr = Tee(sys.__stderr__)
+    for _p in [load_cfg().get('folder', '')] + list(load_cfg().get('train', [])):
+        if _p and os.path.isdir(_p): ALLOWED.add(os.path.normpath(_p))
     other = already_running()
     if other and '--no-open' not in sys.argv:
         open_window(f'http://127.0.0.1:{other}/'); sys.exit(0)

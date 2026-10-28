@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="wf-token" content="__WF_TOKEN__">
 <title>Dmzeta Workflow</title>
 <style>
 :root{--bg:#06060b;--p1:rgba(255,255,255,.045);--p2:rgba(255,255,255,.075);--line:rgba(255,255,255,.09);--txt:#f5f5fa;--mut:#9a9aae;--dim:#6b6b80;
@@ -287,9 +288,10 @@ function previewHTML(r){
 function keyBadge(k){const m=/^(\d+)([AB])$/.exec(k||'');if(!m)return{bg:'#3a3a48',t:'—'};const h=(parseInt(m[1])*30+150)%360,a=m[2]==='A';return{bg:`linear-gradient(135deg,hsl(${h} 90% ${a?58:72}%),hsl(${(h+30)%360} 90% ${a?46:60}%))`,t:k};}
 
 /* ───────── API (con modo demo) ───────── */
+const TOKEN=(document.querySelector('meta[name=wf-token]')||{}).content||'';
 async function api(path,body){
   if(DEMO) return demoApi(path,body);
-  const r=await fetch(path,body!==undefined?{method:'POST',body:JSON.stringify(body)}:{}); return r.json();
+  const r=await fetch(path,body!==undefined?{method:'POST',headers:{'Content-Type':'application/json','X-WF-Token':TOKEN},body:JSON.stringify(body)}:{headers:{'X-WF-Token':TOKEN}}); return r.json();
 }
 async function runJob(title,id,onDone){
   const t=$('#toast'),T=$('#tT'),B=$('#tB'),L=$('#tL'); t.classList.remove('err'); t.classList.add('show'); T.textContent=title+'…'; B.classList.add('ind'); B.firstElementChild.style.width=''; L.textContent='';
@@ -608,7 +610,7 @@ function tick(){
 }
 async function fetchBuffer(r){
   if(DEMO)return synthBuffer(r.p.bpm||100);
-  const res=await fetch(`/audio?folder=${enc(S.folder)}&name=${enc(r.original)}`);if(!res.ok)throw new Error('audio '+res.status);
+  const res=await fetch(`/audio?folder=${enc(S.folder)}&name=${enc(r.original)}`,{headers:{'X-WF-Token':TOKEN}});if(!res.ok)throw new Error('audio '+res.status);
   const ab=await res.arrayBuffer();return AC().decodeAudioData(ab);
 }
 async function regrid(r){

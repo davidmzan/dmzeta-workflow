@@ -8,7 +8,7 @@ pgrep -x git >/dev/null || { rm -f .git/*.lock .git/objects/maintenance.lock; fi
 git config user.name "Dmzeta"
 git config user.email "98977215+davidmzan@users.noreply.github.com"    # email público de GitHub: no expone tu Gmail
 
-./run_tests.command || { echo "⛔ Las pruebas fallan: no se publica."; exit 1; }
+bash ./run_tests.command || { echo "⛔ Las pruebas fallan: no se publica."; exit 1; }
 git add -A
 git commit --amend --reset-author -q -m "Dmzeta Workflow: DJ library prep with learned naming, beat grid and cue points" || exit 1
 git branch -M main

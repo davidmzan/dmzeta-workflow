@@ -25,7 +25,7 @@ La app se cierra sola unos segundos después de cerrar la ventana.
 
 ## Desarrollo: que no se rompa nada al tocar
 
-- `./run_tests.command`: pasa 16 pruebas (nombres, grid con audio sintético, XML de cues, modelos, sintaxis de la interfaz). Tarda unos 3 s y no toca tus datos.
+- `./run_tests.command`: pasa 38 pruebas (nombres, grid, XML de cues con foto de referencia, seguridad del servidor, flujo completo, comprobaciones estáticas). Tarda unos 3 s y no toca tus datos.
 - `./guardar_version.command "qué cambié"`: guarda una versión en git solo si las pruebas pasan.
 - Hay un hook `pre-commit` que ejecuta lo mismo antes de cada `git commit` (para saltarlo: `--no-verify`).
 - Volver atrás: `git log --oneline` y `git checkout <versión> -- djflow.py workflow_server.py workflow_ui.html`.

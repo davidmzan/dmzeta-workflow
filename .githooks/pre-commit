@@ -1,5 +1,5 @@
 #!/bin/bash
 # Antes de cada commit: py_compile + pruebas. Si fallan, no se guarda.
 cd "$(git rev-parse --show-toplevel)"
-python3 -m py_compile djflow.py workflow_server.py || exit 1
-./run_tests.command || { echo "⛔ Pruebas fallidas: commit cancelado (git commit --no-verify para forzar)."; exit 1; }
+python3 -m py_compile djflow.py workflow_server.py djflow_app.py djcore/*.py || exit 1
+bash ./run_tests.command || { echo "⛔ Pruebas fallidas: commit cancelado (git commit --no-verify para forzar)."; exit 1; }

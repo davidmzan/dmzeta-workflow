@@ -25,3 +25,4 @@ informe*.md
 __pycache__/
 *.pyc
 .DS_Store
+djcore/main_text.txt

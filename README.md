@@ -86,19 +86,29 @@ python3 workflow_server.py        # opens the app in your browser
 ./run_tests.command        # or: python3 -m unittest discover -s tests -v
 ```
 
-Sixteen regression tests run in about three seconds on synthetic audio: name grammar round-trips, beat-grid phase on generated click tracks, XML export (positions, colours, loop, Rekordbox fields), the model gate, the MP3-delay compensation, and JS/Python syntax of the UI and server. A `pre-commit` hook runs them, and `./guardar_version.command "message"` commits only when they pass.
+Thirty-eight tests run in about five seconds on synthetic audio, in a throw-away data directory (`DJFLOW_HOME`):
+
+- **Golden snapshot** of the exported Rekordbox XML (cue positions, colours, names, loop, tempo): any accidental change fails the build.
+- **Contract tests**: the naming grammar exists in Python and in JavaScript and is checked for parity with Node.
+- **Server security tests** (token, cross-origin, DNS rebinding, folder allow-list, path traversal, range handling, body limits, config validation).
+- **End-to-end flow**: analyse, review, rename, export cues, undo.
+- **Static guards**: no undefined names in any module, layers import only from lower layers, no personal data tracked by git.
+
+A `pre-commit` hook and GitHub Actions run the same suite; `./guardar_version.command "message"` commits only when it passes.
 
 ## Repository layout
 
 ```
-djflow.py            engine: naming grammar, features, models, beat grid, cues, XML export
-workflow_server.py   local HTTP API (jobs, folder allow-list, state)
+djflow.py            compatibility facade + CLI (re-exports the engine)
+djcore/              the engine, one layer per module; each imports only from the ones above it
+  config  storage  names  audio  grid  preview  features  models  prediction  training  cues  commands
+workflow_server.py   local HTTP API (token, origin checks, allow-listed folders, jobs)
 workflow_ui.html     single-file frontend (Web Audio waveform editor, pads, memory cues)
 djflow_app.py        optional Tk desktop window
-tests/               regression tests
+tests/               unit, contract, security, end-to-end and static tests
 ```
 
-Personal data (collection XML, models, caches, marks, audio) is excluded through `.gitignore`.
+Personal data (collection XML, models, caches, marks, audio) is excluded through `.gitignore`. See [SECURITY.md](SECURITY.md) for what the local server enforces.
 
 ## Stack
 
