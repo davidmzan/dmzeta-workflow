@@ -1,0 +1,27 @@
+# datos personales y generados: no van al repositorio
+cache/
+history/
+backup/
+learned/
+learned_marks/
+learned_cvox/
+*.npz
+*.npz.prev
+*.prev
+done.json
+prefs.json
+config.json
+rekordbox.xml
+*.mp3
+*.wav
+*.m4a
+*.flac
+*.aif*
+preview.wav
+djflow_marks.json
+djflow_cues.xml
+review.csv
+informe*.md
+__pycache__/
+*.pyc
+.DS_Store
