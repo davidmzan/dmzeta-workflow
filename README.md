@@ -1,76 +1,93 @@
 <div align="center">
 
-# Dmzeta Workflow
+# 🎧 Dmzeta Workflow
 
-**A local DJ library-prep tool: rename, tag, beat-grid and cue-point a track in one pass, and learn from every correction you make.**
+### Prepare a track for a DJ set in one pass — and let the tool learn from every correction you make.
 
-Python · NumPy (hand-rolled softmax models) · ffmpeg · Web Audio API · stdlib HTTP server · Rekordbox XML
+Rename · tag · beat-grid · cue-point → **Rekordbox-ready XML**
+
+<br>
+
+[![tests](https://github.com/davidmzan/dmzeta-workflow/actions/workflows/tests.yml/badge.svg)](https://github.com/davidmzan/dmzeta-workflow/actions/workflows/tests.yml)
+![Python](https://img.shields.io/badge/python-3.10%20%7C%203.12-3776AB?logo=python&logoColor=white)
+![NumPy](https://img.shields.io/badge/NumPy-hand--rolled%20models-013243?logo=numpy&logoColor=white)
+![Lint](https://img.shields.io/badge/lint-ruff%20%2B%20mypy-261230)
+![Tests](https://img.shields.io/badge/tests-49%20passing-2ea44f)
+![License](https://img.shields.io/badge/license-MIT-blue)
 
 </div>
 
 ---
 
-## The problem
+## ⚡ At a glance
 
-Preparing a new track for a DJ set used to be a four-tool loop: analyse in Mixed In Key, clean the audio in Platinum Notes, rename and re-tag by hand in Rekordbox, fix the beat grid in Metadatics, re-import, and finally place hot cues and memory cues by ear. Per track that is minutes of repetitive clicking, and the result depends on how tired you are.
+| | |
+| :--- | :--- |
+| **Problem** | Prepping one track meant 4 tools (Mixed In Key, Platinum Notes, Rekordbox, Metadatics) and minutes of repetitive clicking. |
+| **Solution** | One local web app that proposes everything, lets you fix it on the waveform, then writes the renamed files and a Rekordbox XML. |
+| **Twist** | It learns from *your* corrections: what you fix counts 3×, what you only accept 0.5×. |
+| **Engineering** | Layered engine, hardened local server, 49 tests, CI with lint and type checks. No ML framework, only NumPy. |
 
-Dmzeta Workflow replaces the loop with one local web app that **proposes everything**, lets you **correct it visually on the waveform**, and then writes a Rekordbox-ready `XML` (cues, grid, genre, colour, rating) plus the renamed files.
+## 🎯 What it does
 
-## What it does
+| Feature | Detail |
+| :--- | :--- |
+| 🏷️ **Standard naming** | `Title (Mashup)(Open Show)(8 Bars POE)(In Aca)(Aca Out) - 8A - 120`. One grammar (`parse_name` / `build_name`), mirrored in JS and checked for parity. |
+| 🧠 **Learned predictions** | Extender length, extender type (MOE / POE / FME), *In Aca*, *Aca Out*, genre, category and star rating, each with a confidence score. |
+| 📐 **Beat grid** | Onset-flux detection, phase/BPM refinement, then snapped to the *start of the attack* of the first strong hit. |
+| 📍 **Cue points** | Hot cues A/B/C/E/F/H, memory cues (INTRO, START MIX, END MIX, END LOOP), default end loop, cue C colour by vocal entry. |
+| 🌊 **Waveform editor** | Zoom, drag the grid, nudge in ms, quantised or free markers, playback from any marker, full keyboard control. |
+| 🔁 **Learns while you work** | Every grid nudge, colour change and name edit becomes a training example. Models retrain themselves and roll back if training fails. |
+| 📊 **Model-quality panel** | Every retrain is logged; Settings shows each model's accuracy against its baseline. |
+| 🛡️ **Safe by default** | Backups for every rename, one-click undo, local-only server with token and origin checks. |
 
-- **Standardised naming** — `Title (Mashup)(Open Show)(8 Bars POE)(In Aca)(Aca Out) - 8A - 120`. A small grammar (`parse_name` / `build_name`, mirrored in JS) is the single source of truth, and tracks that already follow it are never re-analysed or renamed.
-- **Learned predictions** — extender length (bars), extender type (MOE / POE / FME), *In Aca*, *Aca Out*, genre and category are predicted from the audio plus your existing library, each with a confidence score.
-- **Beat grid** — onset-flux detection with phase/BPM refinement, then snapped to the *start of the attack* of the first strong hit, which is where the eye (and Rekordbox's waveform) expects it.
-- **Cue points** — hot cues A/B/C/E/F/H, memory cues (INTRO, START MIX, END MIX, END LOOP), default end-loop, cue C colour chosen by whether vocals enter before the extender ends.
-- **Waveform editor** — zoom, drag the grid, nudge it in milliseconds, quantised or free marker placement, click track, playback from a marker, keyboard shortcuts for everything.
-- **Learns while you work** — every grid you nudge, cue colour you change and name you edit becomes a training example. Models retrain automatically, and fall back to the previous version if training fails.
-- **Safe by default** — a backup of every renamed file, one-click undo, local-only server (`127.0.0.1`, host-header check, folder allow-list).
+## 🧩 How it works
 
-## How it works
-
+```mermaid
+flowchart LR
+    A[🎵 Audio] --> B[ffmpeg decode]
+    B --> C[Band-energy features<br/>low · mid · hi · vocal · kick · hat · tonal]
+    C --> D[Naming models<br/>bars · type · after · aca-out]
+    C --> E[Beat-grid detector<br/>flux → phase/BPM → attack snap]
+    C --> F[Cue colour · genre · category · stars<br/>CV-gated]
+    D --> G[Review UI<br/>waveform · pads · memory cues]
+    E --> G
+    F --> G
+    G --> H[Rename + tag files]
+    G --> I[djflow_cues.xml]
+    I --> J[Rekordbox import]
+    G -. corrections, weighted .-> K[(Learned examples)]
+    K -. retrain .-> D
+    K -. retrain .-> F
 ```
-audio ──► decode (ffmpeg) ──► features: band energies (low/mid/hi/vocal/kick/hat/tonal)
-                                          │
-              ┌───────────────────────────┼─────────────────────────────┐
-              ▼                           ▼                             ▼
-   naming models (softmax)       beat-grid detector            cue-colour / genre /
-   bars · type · after ·         flux → phase/BPM refine →     category models
-   aca-out · short edit          strong-hit shift →            (with cross-validation
-                                 attack-start snap             and auto-disable gate)
-              └───────────────────────────┼─────────────────────────────┘
-                                          ▼
-              review UI (Web Audio waveform, pads, memory cues)
-                                          ▼
-         rename + tag files   ──►   djflow_cues.xml  ──►  Rekordbox import
-```
 
-A few engineering decisions worth calling out:
+### Design decisions worth calling out
 
-- **No ML framework.** Models are multinomial logistic regression written in NumPy (`Softmax.fit/dump/load`) with per-class and per-sample weights, so the whole thing installs with `numpy` and `ffmpeg` only.
-- **Models must earn their place.** Every trained model is cross-validated against a *majority-class baseline*. If it does not beat the baseline by a margin, it switches itself off and the field is left to the human (this is what happens to the START MIX model today).
-- **Per-file MP3 decoder delay.** Rekordbox does not trim the encoder delay that ffmpeg trims for LAME-tagged MP3s, so cues landed ~38 ms early on those files. The exporter reads `start_time` via `ffprobe` and compensates per file; files without the tag are left alone.
-- **Learning that weighs your own corrections.** Examples you corrected count 3×, ones you only accepted 0.5×, unreviewed tracks are not learned from; every retrain is logged and shown in a model-quality panel.
-- **Atomic, reversible edits.** Renames go through a history log with backups; learned state lives in plain files (`.npz`, `.json`) next to the code.
+- **No ML framework.** Multinomial logistic regression in NumPy (`Softmax.fit/dump/load`) with per-class and per-sample weights. The whole thing installs with `numpy` and `ffmpeg`.
+- **Models must earn their place.** Each model is cross-validated against a *majority-class baseline*; if it does not beat it by a margin it switches itself off and leaves the field to the human.
+- **Learning that weighs your own corrections.** Corrected examples count 3×, accepted ones 0.5×, unreviewed tracks are not learned from.
+- **Per-file MP3 decoder delay.** Rekordbox does not trim the encoder delay ffmpeg trims for LAME-tagged MP3s, so cues landed ~38 ms early. The exporter reads `start_time` via `ffprobe` and compensates per file.
+- **Atomic, reversible edits.** Renames go through a history log with backups; every shared state file is written atomically.
 
-## Results and honest limitations
+## 📈 Results and honest limitations
 
-Measured on my own library, small samples, so read these as indicative rather than benchmarks:
+Measured on my own library with small samples, so read these as indicative, not as benchmarks.
 
 | Area | Result |
-| --- | --- |
-| Extender length (bars) | 33 / 39 exact (85 %) on a 45-track sample |
+| :--- | :--- |
+| Extender length (bars) | **85 %** exact (33 / 39) on a 45-track sample |
 | Extender type | 74 % on the same sample |
-| *Aca Out* flag | 96 % |
-| Beat grid in Rekordbox | within a few ms on the tracks I checked visually, after the attack-start snap + per-file MP3 compensation |
+| *Aca Out* flag | **96 %** |
+| Beat grid in Rekordbox | Within a few ms on the tracks checked visually |
 | Cue C colour (red / lime) | 78 % cross-validated on 27 corrected tracks vs 67 % majority baseline |
-| START MIX placement | 21 % exact vs 17 % baseline → **disabled**: it depends on musical judgement ("the second chorus") that these features do not capture |
+| START MIX placement | 21 % vs 17 % baseline → **disabled** (it depends on musical judgement these features do not capture) |
 
-Known gaps: Rekordbox ignores memory-cue colours and the *active loop* flag when importing XML (they live in its private database, which this tool deliberately does not touch); genre / category / star models are trained only on tracks you have already tagged; the beat grid assumes a constant tempo.
+**Known gaps:** Rekordbox ignores memory-cue colours and the *active loop* flag when importing XML (they live in its private database, which this tool deliberately does not touch); genre / category / star models only learn from tracks you have already tagged; the grid assumes a constant tempo.
 
-## Quick start
+## 🚀 Quick start
 
 ```bash
-# macOS, Python 3.9+, ffmpeg (brew install ffmpeg)
+# macOS · Python 3.10+ · ffmpeg (brew install ffmpeg)
 python3 -m venv .venv && .venv/bin/pip install -e .
 .venv/bin/dmzeta-workflow          # opens the app in your browser
 ```
@@ -79,44 +96,51 @@ python3 -m venv .venv && .venv/bin/pip install -e .
 2. **Analyse**, review on the waveform, **Apply + generate cues**.
 3. Import `djflow_cues.xml` in Rekordbox (*rekordbox xml* view).
 
-`instalar_djflow.command` does the same (isolated `.venv`, dependencies from `pyproject.toml`) and creates a double-clickable macOS app.
+`instalar_djflow.command` does the same and creates a double-clickable macOS app.
 
-## Tests
+## 🧪 Quality and safety
 
 ```bash
 ./run_tests.command        # or: python3 -m unittest discover -s tests -v
 ```
 
-Forty-nine tests run in about fifteen seconds on synthetic audio, in a throw-away data directory (`DJFLOW_HOME`):
+49 tests run in about 15 seconds on synthetic audio, in a throw-away data directory (`DJFLOW_HOME`).
 
-- **Golden snapshot** of the exported Rekordbox XML (cue positions, colours, names, loop, tempo): any accidental change fails the build.
-- **Contract tests**: the naming grammar exists in Python and in JavaScript and is checked for parity with Node.
-- **Server security tests** (token, cross-origin, DNS rebinding, folder allow-list, path traversal, range handling, body limits, config validation).
-- **End-to-end flow**: analyse, review, rename, export cues, undo.
-- **UI tests**: `index.html` references exactly the CSS/JS files on disk, each script parses, the static route rejects traversal, and a Node harness boots the whole UI in demo mode with a stubbed DOM.
-- **Static guards**: no undefined names in any module, layers import only from lower layers, no personal data tracked by git.
+| Layer | What it protects |
+| :--- | :--- |
+| **Golden snapshot** | The exported Rekordbox XML (positions, colours, names, loop, tempo): any accidental change fails the build. |
+| **Contract tests** | The naming grammar exists in Python and JavaScript and is checked for parity with Node. |
+| **Server security** | Session token, cross-origin and DNS-rebinding checks, folder allow-list, path traversal, body and range limits. |
+| **End to end** | Analyse → review → rename → export cues → undo. |
+| **UI tests** | `index.html` references exactly the files on disk; a Node harness boots the whole UI in demo mode. |
+| **Static guards** | No undefined names, layers import only from lower layers, no personal data tracked by git. |
 
-A `pre-commit` hook and GitHub Actions run the same suite plus `ruff` (undefined names, unused imports) and `mypy`; `./guardar_version.command "message"` commits only when it passes.
+A `pre-commit` hook and GitHub Actions run the suite plus `ruff` and `mypy`. `./guardar_version.command "message"` commits only when everything passes. See [SECURITY.md](SECURITY.md) for what the local server enforces.
 
-## Repository layout
+## 🗂️ Repository layout
 
 ```
-djflow.py            compatibility facade + CLI (re-exports the engine)
-djcore/              the engine, one layer per module; each imports only from the ones above it
-  config  storage  names  audio  grid  preview  features  models  prediction  training  cues  commands
+djflow.py            compatibility facade + CLI
+djcore/              the engine, one layer per module, each importing only from the ones above
+  config → storage → names → audio → grid → preview → features
+         → models → prediction → training → cues → commands
 workflow_server.py   local HTTP API (token, origin checks, allow-listed folders, jobs)
-ui/                  frontend: index.html + css/ (6 files) + js/ (11 files, loaded in order)
-                     (Web Audio waveform editor, pads, memory cues, model-quality panel)
+ui/                  frontend: index.html + css/ (6 files) + js/ (11 files)
 djflow_app.py        optional Tk desktop window
-tests/               unit, contract, security, end-to-end and static tests
+tests/               unit, contract, security, end-to-end, UI and static tests
 ```
 
-Personal data (collection XML, models, caches, marks, audio) is excluded through `.gitignore`. See [SECURITY.md](SECURITY.md) for what the local server enforces.
+Personal data (collection XML, models, caches, marks, audio) is excluded through `.gitignore`.
 
-## Stack
+## 🛠️ Stack
 
-Python 3 · NumPy · ffmpeg / ffprobe · vanilla JavaScript + Web Audio API · `http.server` · Rekordbox XML · `unittest`
+Python 3 · NumPy · ffmpeg / ffprobe · vanilla JavaScript + Web Audio API · `http.server` · Rekordbox XML · `unittest` · ruff · mypy · GitHub Actions
 
 ---
 
-*Built by [Dmzeta](https://github.com/davidmzan) — DJ and data engineer. The UI is in Spanish; the code and this README are in English.*
+<div align="center">
+
+Built by **David Muñoz Zancada** ([Dmzeta](https://github.com/davidmzan)) — DJ and data engineer.<br>
+The UI is in Spanish; the code and this README are in English. Released under the [MIT License](LICENSE).
+
+</div>
