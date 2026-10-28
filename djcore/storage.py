@@ -1,7 +1,7 @@
 """Lectura y escritura de estado en disco (atómica): marcas, preferencias, registro de pistas ya procesadas."""
 import sys, os, re, csv, json, time, shutil, hashlib, subprocess
 import numpy as np
-from .config import DONE_FILE, EXT, MARKS_FILE, PREFS_FILE
+from .config import DONE_FILE, EXT, MARKS_FILE, MODEL_LOG, PREFS_FILE
 
 def atomic_write_bytes(path, data):
     """Escribe en un archivo temporal y lo renombra: si algo falla a medias, el archivo anterior queda intacto."""
@@ -56,3 +56,17 @@ def load_marks(folder):
 
 def save_marks(folder, d):
     atomic_write_json(os.path.join(folder, MARKS_FILE), d, indent=1)
+
+
+def load_model_log():
+    try: return json.load(open(MODEL_LOG, encoding='utf-8'))
+    except Exception: return []
+
+def log_model(name, **info):
+    """Anota cada reentrenamiento (cuándo, con cuántos ejemplos, cuántos tuyos, acierto y referencia) para ver si la app mejora de verdad."""
+    log = load_model_log(); log.append(dict(model=name, when=time.strftime('%Y-%m-%d %H:%M:%S'), **info)); atomic_write_json(MODEL_LOG, log[-300:])
+
+def learn_weight(edited, accepted):
+    """Peso de un ejemplo: corregido por ti = alto; aceptado con ✓ = bajo; sin revisar = 0 (no se aprende)."""
+    from .config import W_ACCEPTED, W_CORRECTED
+    return W_CORRECTED if edited else (W_ACCEPTED if accepted else 0.0)

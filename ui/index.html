@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="wf-token" content="__WF_TOKEN__">
+<title>Dmzeta Workflow</title>
+<link rel="stylesheet" href="/ui/css/00-base.css">
+<link rel="stylesheet" href="/ui/css/01-header.css">
+<link rel="stylesheet" href="/ui/css/02-main.css">
+<link rel="stylesheet" href="/ui/css/03-inspector.css">
+<link rel="stylesheet" href="/ui/css/04-deck.css">
+<link rel="stylesheet" href="/ui/css/05-overlays.css">
+</head>
+<body>
+<div id="app">
+  <header class="hdr">
+    <div class="logo"><div class="eq"><i></i><i></i><i></i><i></i><i></i></div><div><b>Dmzeta Workflow</b><small>Prep · Cues · Library</small></div></div>
+    <div class="steps" id="steps">
+      <div class="step" data-s="1"><em>1</em>Analizar</div><div class="sep"></div>
+      <div class="step" data-s="2"><em>2</em>Revisar</div><div class="sep"></div>
+      <div class="step" data-s="3"><em>3</em>Aplicar</div><div class="sep"></div>
+      <div class="step" data-s="4"><em>4</em>Cues</div>
+    </div>
+    <div class="acts">
+      <button class="ico" id="bUndo" title="Deshacer última tanda" style="display:none">↶</button>
+      <button class="ico" id="bSet" title="Ajustes">⚙</button>
+      <button class="btn pri" id="bCta">Elegir carpeta</button>
+    </div>
+  </header>
+
+  <div class="main">
+    <section class="crate glass">
+      <div class="fstat" id="fstat"></div>
+      <div class="tb" id="filters"></div>
+      <div class="tb" id="bulk" style="padding-top:0"></div>
+      <div class="list" id="list"></div>
+    </section>
+    <section class="insp glass" id="insp"></section>
+  </div>
+
+  <section class="deck glass" id="deck">
+    <div class="dtop">
+      <div class="dname" id="dName">Sin pista seleccionada</div>
+      <span class="badge" id="dKey" style="display:none"></span><span class="badge" id="dBpm" style="display:none"></span>
+      <div class="read"><b id="dTime">0:00.0</b><span id="dBar">COMPÁS —</span></div>
+    </div>
+    <div class="ovwrap"><canvas id="ov"></canvas></div>
+    <div class="wfwrap"><canvas id="wf"></canvas><div class="zoomc"><button class="zb" id="tZm" title="Alejar (−)">−</button><button class="zb" id="tZp" title="Acercar (+)">+</button><button class="zb" id="tFit" title="Ver toda la pista">TODO</button></div><div class="wfmsg" id="wfMsg" style="display:none"></div></div>
+    <div class="ctrl">
+      <div class="grp">
+        <button class="tbtn" id="tStart" title="Ir al primer beat">⏮</button>
+        <button class="play" id="tPlay" title="Reproducir / pausa (Espacio)">▶</button>
+        <button class="tbtn" id="tCut" title="Ir al corte del extender">CORTE</button>
+        <button class="tbtn on" id="tClk" title="Clic en cada compás (M)">CLICS</button>
+        <button class="tbtn on" id="tQ" title="Quantize (Q): el cursor salta al beat más cercano. Apágalo para moverte libre.">QUANTIZE</button>
+        <button class="tbtn" id="tMk" title="Marca de reproducción (K). Al ponerla suena desde ella y Espacio vuelve a ella. Pulsa otra vez para quitarla y tocar desde el cursor. Si pulsas un cue, suena desde el cue.">📍 MARCA</button>
+      </div>
+      <div class="grp"><span class="gl">GRID</span>
+        <button class="tbtn c" id="gDrag" title="Arrastrar el grid con el ratón sobre la onda (Shift+arrastrar también)">✋ ARRASTRAR</button>
+        <button class="tbtn c" id="gMm" title="Grid atrás los ms indicados ( , )">◂ ms</button><input id="gStep" type="number" min="1" max="500" step="1" value="5" title="Milisegundos por paso (1 a 500)" style="width:52px;height:36px;border-radius:11px;background:rgba(0,0,0,.35);border:1px solid var(--line);color:#fff;text-align:center;font-weight:700"><button class="tbtn c" id="gMp" title="Grid adelante los ms indicados ( . )">ms ▸</button>
+        <button class="tbtn c" id="gR" title="Volver al grid y BPM detectados">↺</button><button class="tbtn c" id="gRe" title="Reanalizar el grid de esta pista desde cero (ignora lo guardado y la caché)">⟳ REANALIZAR</button>
+      </div>
+      <div class="grp"><span class="gl">BPM</span><input id="bpmIn" type="number" step="0.01" min="40" max="240" title="Rueda del ratón encima: ±0,01 (Shift ±0,1 · Alt ±0,001). También puedes escribirlo." style="width:92px;height:36px;border-radius:11px;background:rgba(0,0,0,.35);border:1px solid var(--line);color:#fff;text-align:center;font-weight:700;cursor:ns-resize"></div>
+      <div class="padcol">
+        <div class="pads" id="pads"></div>
+        <div class="pads mpads" id="mpads" title="Memory cues. Clic: saltar (o ponerlo en el cursor si está vacío) · Shift+clic o clic derecho: quitarlo · doble clic en uno libre: ponerle nombre"></div>
+
+      </div>
+      <div class="ptools">
+          <div class="ccol"><button class="tbtn c" id="cColBtn" title="Cambiar el color del hot cue C (si el detectado no es el correcto)"><i id="cDot"></i>COLOR C</button><div class="pal" id="pal"></div></div>
+          <div class="ccol"><button class="tbtn c" id="memCol" title="Editar nombre y color del memory cue seleccionado (clic en un memory cue para seleccionarlo; doble clic también abre esto)"><i id="memDot"></i>EDITAR MEMORY</button><div class="pal m" id="palM"></div></div>
+          <span class="gl">LOOP</span><select id="lLen" class="tbtn c" title="Duración del loop final en compases"><option value="1">1 comp.</option><option value="2">2 comp.</option><option value="4">4 comp.</option><option value="8" selected>8 comp.</option><option value="16">16 comp.</option><option value="32">32 comp.</option></select>
+        </div>
+    </div>
+  </section>
+</div>
+
+<div id="toast"><b id="tT">Trabajando…</b><div class="bar" id="tB"><i></i></div><p id="tL"></p></div>
+<div class="scrim" id="scrim"><div class="modal glass"><h3 id="mT"></h3><div class="body" id="mB"></div><div class="ft" id="mF"></div></div></div>
+<aside class="drawer" id="drawer"></aside>
+<script src="/ui/js/00-core.js"></script>
+<script src="/ui/js/10-names.js"></script>
+<script src="/ui/js/20-api.js"></script>
+<script src="/ui/js/30-list.js"></script>
+<script src="/ui/js/40-inspector.js"></script>
+<script src="/ui/js/50-deck.js"></script>
+<script src="/ui/js/60-playback.js"></script>
+<script src="/ui/js/70-actions.js"></script>
+<script src="/ui/js/80-settings.js"></script>
+<script src="/ui/js/90-keys-init.js"></script>
+<script src="/ui/js/100-demo.js"></script>
+</body>
+</html>

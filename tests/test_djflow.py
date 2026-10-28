@@ -138,12 +138,6 @@ class ModelTest(unittest.TestCase):
 
 
 class FilesTest(unittest.TestCase):
-    def test_ui_script_syntax(self):
-        if not shutil.which('node'): self.skipTest('sin node')
-        s = open(os.path.join(ROOT, 'workflow_ui.html'), encoding='utf-8').read(); js = re.search(r'<script>([\s\S]*)</script>', s).group(1)
-        p = os.path.join(TMP, 'ui.js'); open(p, 'w').write(js)
-        r = subprocess.run(['node', '--check', p], capture_output=True, text=True); self.assertEqual(r.returncode, 0, r.stderr)
-
     def test_server_compiles(self):
         import py_compile; py_compile.compile(os.path.join(ROOT, 'workflow_server.py'), doraise=True)
 

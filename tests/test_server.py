@@ -83,6 +83,11 @@ class SecurityTest(ServerBase):
         self.assertEqual(c['export_offset_ms'], 200.0); self.assertNotEqual(c['xml'], 'malo.txt'); self.assertNotIn('inventada', c); self.assertIs(c['backup'], False)
         self.js('POST', '/api/cfg', {'export_offset_ms': 0, 'backup': True})
 
+    def test_quality_endpoint(self):
+        dj.log_model('prueba', n=10, n_user=2, accuracy=0.5, baseline=0.4, enabled=True)
+        st, d = self.js('GET', '/api/quality'); self.assertEqual(st, 200)
+        self.assertIn('prueba', [e['model'] for e in d['latest']]); self.assertEqual(self.req('GET', '/api/quality', token=False)[0], 401)
+
     def test_oversized_body_rejected(self):
         c = http.client.HTTPConnection('127.0.0.1', self.port, timeout=10)
         c.putrequest('POST', '/api/cfg', skip_host=True); c.putheader('Host', f'127.0.0.1:{self.port}'); c.putheader('X-WF-Token', ws.TOKEN)

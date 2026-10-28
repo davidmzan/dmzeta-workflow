@@ -3,7 +3,7 @@
 La app se abre en una ventana propia (Chrome en modo app si lo tienes; si no, tu navegador). Todo corre en tu Mac, nada sale a internet.
 
 ## Instalación (una vez)
-Copia estos archivos a ~/Desktop/djflow: djflow.py, workflow_server.py, workflow_ui.html, instalar_djflow.command, djflow.command. Después, en Terminal:
+Copia estos archivos a ~/Desktop/djflow: djflow.py, workflow_server.py, ui/ (index.html, css/, js/), instalar_djflow.command, djflow.command. Después, en Terminal:
 
     cd ~/Desktop/djflow
     chmod +x instalar_djflow.command djflow.command
@@ -28,6 +28,6 @@ La app se cierra sola unos segundos después de cerrar la ventana.
 - `./run_tests.command`: pasa 38 pruebas (nombres, grid, XML de cues con foto de referencia, seguridad del servidor, flujo completo, comprobaciones estáticas). Tarda unos 3 s y no toca tus datos.
 - `./guardar_version.command "qué cambié"`: guarda una versión en git solo si las pruebas pasan.
 - Hay un hook `pre-commit` que ejecuta lo mismo antes de cada `git commit` (para saltarlo: `--no-verify`).
-- Volver atrás: `git log --oneline` y `git checkout <versión> -- djflow.py workflow_server.py workflow_ui.html`.
+- Volver atrás: `git log --oneline` y `git checkout <versión> -- djflow.py workflow_server.py ui/ (index.html, css/, js/)`.
 - No se suben a git tus datos (caché, modelos, marcas, XML, audios): están en `.gitignore`.
 - Si cambias algo que afecta al grid o al XML, añade una prueba en `tests/test_djflow.py` antes de guardar.

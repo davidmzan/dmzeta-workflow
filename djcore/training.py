@@ -1,8 +1,8 @@
 """Entrenamiento y aprendizaje automático a partir de tu colección y de tus correcciones."""
 import sys, os, re, csv, json, time, shutil, hashlib, subprocess
 import numpy as np
-from .config import CANDS, CVOX_MODEL, DATA, EXT, GENRE_MODEL, HEX_CAT, LEARN_CVOX_DIR, LEARN_DIR, LEARN_MARKS_DIR, LIME_C, MARKS_MODEL, MODEL_PATH, PREFS_FILE, RED_C, START_KS_MAX
-from .storage import _pref, atomic_savez, atomic_write_json, load_marks, load_prefs
+from .config import CANDS, CVOX_MODEL, DATA, EXT, GENRE_MODEL, HEX_CAT, LEARN_CVOX_DIR, LEARN_DIR, LEARN_MARKS_DIR, LEARN_META_DIR, LIME_C, MARKS_MODEL, MODEL_PATH, PREFS_FILE, RED_C, START_KS_MAX, W_CORRECTED
+from .storage import _pref, atomic_savez, atomic_write_json, learn_weight, load_marks, load_prefs, log_model
 from .names import parse_name
 from .audio import get_features, struct_matrix, track_bpm_key
 from .grid import detect_grid, grid_bias
@@ -61,6 +61,7 @@ def cmd_train(*folders):
                 ok = ya[sel][int(pk.argmax())] == 1; conf = pk.max() / pk.sum(); tot += 1; hit += ok
                 if not ok and (ya[sel] == 1).any(): key = (int(kk[sel][ya[sel] == 1][0]), int(kk[sel][int(pk.argmax())])); miss[key] = miss.get(key, 0) + 1
                 if conf >= .6: hi_tot += 1; hi_hit += ok
+            bars_acc = hit / max(tot, 1)
             report.append(f'- **barras del extender**: {hit}/{tot} exactas ({100 * hit / max(tot, 1):.0f} %). Con confianza ≥ 0,6: {hi_hit}/{hi_tot}')
             if miss: report.append('  - errores típicos (real → predicho): ' + ', '.join(f'{a}→{b} ({n})' for (a, b), n in sorted(miss.items(), key=lambda x: -x[1])[:5]))
         else:
@@ -82,6 +83,7 @@ def cmd_train(*folders):
                 if cf: report.append(f'  - errores típicos en {task} (real → predicho): ' + ', '.join(f'{a}→{b} ({n})' for (a, b), n in sorted(cf.items(), key=lambda x: -x[1])[:5]))
         Softmax(classes).fit(X, y, w=wt).dump(task, store)
     atomic_savez(MODEL_PATH, **store)
+    log_model('names', n=len(rows), n_user=len(os.listdir(LEARN_DIR)) if os.path.isdir(LEARN_DIR) else 0, accuracy=round(float(locals().get('bars_acc') or 0), 3), note='acierto = compases exactos')
     with open(os.path.join(DATA, 'informe.md'), 'w', encoding='utf-8') as fh: fh.write('\n'.join(report) + '\n')
     print('\n' + '\n'.join(report) + f'\n\nModelo guardado en {MODEL_PATH}\nInforme en {os.path.join(DATA, "informe.md")}')
 
@@ -135,6 +137,7 @@ def cmd_train_marks(xml_path, limit=1200):
     if not useful: rep.append('- ESTADO: DESACTIVADO. No supera claramente a elegir siempre el mismo compás, así que no se propone START MIX; lo marcas tú. Se reintentará al juntar más marcas tuyas.')
     else: rep.append('- ESTADO: ACTIVO (supera a la referencia).')
     store = {'start__off': np.array([0 if useful else 1])}; Softmax([0, 1]).fit(X, y, w=W).dump('start2', store); atomic_savez(MARKS_MODEL, **store)
+    log_model('start_mix', n=int(tot), n_user=len(learned), accuracy=round(ex / max(tot, 1), 3), baseline=round(basepct / 100, 3), enabled=bool(useful))
     open(os.path.join(DATA, 'informe_marks.md'), 'w', encoding='utf-8').write('\n'.join(rep) + '\n'); print('\n' + '\n'.join(rep) + f'\n\nModelo guardado en {MARKS_MODEL}')
     if xml_path and os.path.exists(xml_path):
         try: train_cvox(xml_path)
@@ -145,15 +148,16 @@ def train_cvox(xml_path=None, min_n=20):
     learned = []
     if os.path.isdir(LEARN_CVOX_DIR):
         for fn in sorted(os.listdir(LEARN_CVOX_DIR)):
-            if fn.endswith('.npz'): z = np.load(os.path.join(LEARN_CVOX_DIR, fn)); learned.append((z['A'], int(z['N']), int(z['y'])))
+            if fn.endswith('.npz'): z = np.load(os.path.join(LEARN_CVOX_DIR, fn)); learned.append((z['A'], int(z['N']), int(z['y']), float(z['w']) if 'w' in z.files else W_CORRECTED))
     print(f'Color del cue C: {len(learned)} pistas corregidas por ti.')
     if len(learned) < min_n: print(f'Hacen falta al menos {min_n}; sin modelo el color del C no se propone (lo eliges tú).'); return
-    X = np.array([cvox_x(A, N) for A, N, _ in learned]); y = np.array([l for _, _, l in learned])
+    X = np.array([cvox_x(A, N) for A, N, _, _ in learned]); y = np.array([l for _, _, l, _ in learned]); W = np.array([w for _, _, _, w in learned])
     if y.min() == y.max(): print('Todas las pistas tienen el mismo color: no se aprende.'); return
-    P = cv_predict(X, y, list(range(len(y))), [0, 1]); acc = float(((P[:, 1] >= .5) == (y == 1)).mean()); base = max(y.mean(), 1 - y.mean()); ok = acc >= base + 0.05
+    P = cv_predict(X, y, list(range(len(y))), [0, 1], w=W); acc = float(((P[:, 1] >= .5) == (y == 1)).mean()); base = max(y.mean(), 1 - y.mean()); ok = acc >= base + 0.05
     rep = ['# Informe color del cue C', f'Pistas corregidas por ti: {len(y)} (rojas: {int(y.sum())})', f'- acierto (validación cruzada): {100 * acc:.0f} %  (referencia, elegir siempre lo más habitual: {100 * base:.0f} %)',
            '- ESTADO: ' + ('ACTIVO' if ok else 'DESACTIVADO (no supera a la referencia: eliges tú el color)')]
-    store = {'cvox__off': np.array([0 if ok else 1])}; Softmax([0, 1]).fit(X, y).dump('cvox2', store); atomic_savez(CVOX_MODEL, **store)
+    store = {'cvox__off': np.array([0 if ok else 1])}; Softmax([0, 1]).fit(X, y, w=W).dump('cvox2', store); atomic_savez(CVOX_MODEL, **store)
+    log_model('cvox', n=int(len(y)), n_user=int((W >= W_CORRECTED).sum()), accuracy=round(acc, 3), baseline=round(float(base), 3), enabled=bool(ok))
     open(os.path.join(DATA, 'informe_cvox.md'), 'w', encoding='utf-8').write('\n'.join(rep) + '\n'); print('\n' + '\n'.join(rep))
 
 _GEN_CACHE = {}
@@ -188,24 +192,35 @@ def train_genre(xml_path, limit=2500, min_n=25):
     print(f'Género: {len(items)} pistas con género y archivo accesible, {len(keep)} géneros con al menos {min_n} pistas.')
     if len(items) < 150 or len(keep) < 3: print('Hacen falta al menos 150 pistas con género; no se entrena el género.'); return
     rng = np.random.RandomState(0); rng.shuffle(items); items = items[:int(limit)]; X, y, t = [], [], []
-    CY, SY = [], []
+    CY, SY, WY, WC, WS = [], [], [], [], []
     for ti, (loc, bpm, t0, g, cat_, st_) in enumerate(items):
         print(f'  [{ti + 1}/{len(items)}] {os.path.basename(loc)[:70]}', flush=True)
         try: A, _ = struct_matrix(loc, bpm, t0)
         except Exception as e: print('    error:', e); continue
-        X.append(genre_x(A, bpm)); y.append(g); t.append(ti); CY.append(cat_); SY.append(st_)
-    X = np.array(X); ya = np.array(y); classes = sorted(set(y)); P = cv_predict(X, ya, t, classes)
+        X.append(genre_x(A, bpm)); y.append(g); t.append(ti); CY.append(cat_); SY.append(st_); WY.append(1.0); WC.append(1.0); WS.append(1.0)
+    n_user = 0
+    if os.path.isdir(LEARN_META_DIR):                                    # tus correcciones: pesan más que la colección (W_CORRECTED) o menos si solo diste ✓ (W_ACCEPTED)
+        for j, fn in enumerate(sorted(x for x in os.listdir(LEARN_META_DIR) if x.endswith('.npz'))):
+            z = np.load(os.path.join(LEARN_META_DIR, fn)); X.append(z['x']); y.append(str(z['genre'])); CY.append(str(z['cat'])); SY.append(str(z['stars']))
+            WY.append(float(z['gw'])); WC.append(float(z['cw'])); WS.append(float(z['sw'])); t.append(len(items) + j); n_user += 1
+    print(f'Ejemplos tuyos (correcciones y ✓): {n_user}.')
+    X = np.array(X); store = {}; rep = []
+    gi = [i for i, v in enumerate(y) if v and WY[i] > 0]
+    ya = np.array([y[i] for i in gi]); Xg = X[gi]; tg = [t[i] for i in gi]; wg = np.array([WY[i] for i in gi]); classes = sorted(set(ya))
+    P = cv_predict(Xg, ya, tg, classes, w=wg)
     top1 = float((np.array(classes)[P.argmax(1)] == ya).mean()); top3 = float(np.mean([ya[i] in np.array(classes)[np.argsort(-P[i])[:3]] for i in range(len(ya))]))
-    base = Counter(y).most_common(1)[0]; dist = ', '.join(f'{g} {c}' for g, c in Counter(y).most_common(6))
-    rep = ['# Informe de género', f'Pistas: {len(y)} · géneros: {len(classes)}', f'- acierto del primero: {100 * top1:.0f} %', f'- el correcto entre los 3 primeros: {100 * top3:.0f} %',
-           f'- referencia (siempre «{base[0]}»): {100 * base[1] / len(y):.0f} %', f'- reparto: {dist}']
-    store = {}; Softmax(classes).fit(X, ya).dump('genre', store)
-    for nm, lab, nom in (('cat', CY, 'categoría (color)'), ('star', SY, 'estrellas')):                  # mismas características de audio, sin volver a analizar
-        idx = [i for i, v in enumerate(lab) if v]
+    base = Counter(ya).most_common(1)[0]; dist = ', '.join(f'{g} {c}' for g, c in Counter(ya).most_common(6))
+    rep = ['# Informe de género', f'Pistas: {len(ya)} (de ellas {n_user} tuyas) · géneros: {len(classes)}', f'- acierto del primero: {100 * top1:.0f} %', f'- el correcto entre los 3 primeros: {100 * top3:.0f} %',
+           f'- referencia (siempre «{base[0]}»): {100 * base[1] / len(ya):.0f} %', f'- reparto: {dist}']
+    Softmax(classes).fit(Xg, ya, w=wg).dump('genre', store)
+    log_model('genre', n=int(len(ya)), n_user=n_user, accuracy=round(top1, 3), baseline=round(base[1] / len(ya), 3), enabled=True)
+    for nm, lab, wl, nom in (('cat', CY, WC, 'categoría (color)'), ('star', SY, WS, 'estrellas')):     # mismas características de audio, sin volver a analizar
+        idx = [i for i, v in enumerate(lab) if v and wl[i] > 0]
         if len(idx) < 150 or len(set(lab[i] for i in idx)) < 2: rep.append(f'- {nom}: pocas pistas con dato, no se aprende'); continue
-        Xs, ys = X[idx], np.array([lab[i] for i in idx]); cls = sorted(set(ys)); Ps = cv_predict(Xs, ys, [t[i] for i in idx], cls)
+        Xs, ys = X[idx], np.array([lab[i] for i in idx]); ws_ = np.array([wl[i] for i in idx]); cls = sorted(set(ys)); Ps = cv_predict(Xs, ys, [t[i] for i in idx], cls, w=ws_)
         acc = float((np.array(cls)[Ps.argmax(1)] == ys).mean()); b0 = Counter(ys).most_common(1)[0][1] / len(ys); ok = acc >= b0 + 0.05
-        Softmax(cls).fit(Xs, ys).dump(nm, store); store[f'{nm}__off'] = np.array([0 if ok else 1])
+        Softmax(cls).fit(Xs, ys, w=ws_).dump(nm, store); store[f'{nm}__off'] = np.array([0 if ok else 1])
+        log_model(nm, n=int(len(idx)), n_user=int(sum(1 for i in idx if t[i] >= len(items))), accuracy=round(acc, 3), baseline=round(float(b0), 3), enabled=bool(ok))
         rep.append(f'- {nom}: acierto {100 * acc:.0f} % (siempre la más común: {100 * b0:.0f} %) → ' + ('se propone solo' if ok else 'NO supera al azar: se rellena a mano'))
     atomic_savez(GENRE_MODEL, **store)
     open(os.path.join(DATA, 'informe_genre.md'), 'w', encoding='utf-8').write('\n'.join(rep) + '\n'); print('\n' + '\n'.join(rep))
@@ -237,7 +252,7 @@ def remember_marks(folder, applied):
                     fold = (dlt + beat / 2) % beat - beat / 2
                     if abs(fold) <= 0.08: gl.append(round(fold * 1000, 1)); gfix += 1
             except Exception as e: print('  grid no aprendido para', f, ':', e)
-        cm = mk.get('ccol')
+        cm = mk.get('ccol'); cm_w = learn_weight(cm is not None, bool(mk.get('ok')))
         if cm is None and mk.get('ok') and parse_name(f)['bars']:                       # color automático que diste por bueno con ✓
             try:
                 path_ = os.path.join(folder, f); b_ = track_bpm_key(path_)[0]; t_ = float(mk['t0']) if mk.get('t0') is not None else detect_grid(path_, b_)[0]
@@ -249,8 +264,19 @@ def remember_marks(folder, applied):
                 path = os.path.join(folder, f); bpm0, _ = track_bpm_key(path)
                 t0c = float(mk['t0']) if mk.get('t0') is not None else detect_grid(path, bpm0)[0]
                 A, _ = struct_matrix(path, float(mk.get('bpm') or bpm0), t0c)
-                np.savez_compressed(os.path.join(LEARN_CVOX_DIR, hashlib.md5(f'{f}|{os.path.getsize(path)}'.encode()).hexdigest() + '.npz'), A=A, N=parse_name(f)['bars'], y=int(tuple(cm) == RED_C)); cfix += 1
+                np.savez_compressed(os.path.join(LEARN_CVOX_DIR, hashlib.md5(f'{f}|{os.path.getsize(path)}'.encode()).hexdigest() + '.npz'), A=A, N=parse_name(f)['bars'], y=int(tuple(cm) == RED_C), w=cm_w); cfix += 1
             except Exception as e: print('  color del C no aprendido para', f, ':', e)
+        gw = learn_weight(mk.get('genre_edit'), mk.get('ok') and mk.get('genre')) if mk.get('genre') else 0.0
+        cw = learn_weight(mk.get('cat_edit'), mk.get('ok') and mk.get('cat')) if mk.get('cat') else 0.0
+        sw = learn_weight(mk.get('stars') and not mk.get('stars_auto'), mk.get('ok') and mk.get('stars')) if mk.get('stars') else 0.0
+        if gw or cw or sw:                                                                  # género, categoría o estrellas que has corregido (o dado por buenos con ✓)
+            try:
+                os.makedirs(LEARN_META_DIR, exist_ok=True); path = os.path.join(folder, f); bpm0, _ = track_bpm_key(path)
+                t0m = float(mk['t0']) if mk.get('t0') is not None else detect_grid(path, bpm0)[0]; bpmm = float(mk.get('bpm') or bpm0)
+                A, _ = struct_matrix(path, bpmm, t0m)
+                np.savez_compressed(os.path.join(LEARN_META_DIR, hashlib.md5(f'{f}|{os.path.getsize(path)}'.encode()).hexdigest() + '.npz'), x=genre_x(A, bpmm), genre=str(mk.get('genre') or ''),
+                                    cat=str(mk.get('cat') or ''), stars=str(mk.get('stars') or ''), gw=gw, cw=cw, sw=sw)
+            except Exception as e: print('  género/categoría/estrellas no aprendidos para', f, ':', e)
         if mk.get('start') is None or (mk.get('auto') and not mk.get('ok')): continue      # propuesta automática sin confirmar: no se aprende
         if mk.get('end') is not None: g = str(int(mk['end'] - mk['start'])); gaps[g] = gaps.get(g, 0) + 1
         if mk.get('loop') and not mk.get('loopAuto'): l = str(int(mk['loop'][1])); loops[l] = loops.get(l, 0) + 1
@@ -295,6 +321,12 @@ def auto_learn(xml_path='', folders=(), n=10):
         print(f'{nc} correcciones del color del C. Reentrenando…')
         try: train_cvox(xml_path)
         except BaseException as e: print('No se pudo reentrenar el color del C:', e)
+    nmeta = _newer(LEARN_META_DIR, GENRE_MODEL)
+    if os.path.exists(GENRE_MODEL) and nmeta >= max(3, n // 3) and xml_path and os.path.exists(xml_path):
+        print(f'{nmeta} correcciones de género/categoría/estrellas. Reentrenando…')
+        try: train_genre(xml_path)
+        except BaseException as e: print('No se pudo reentrenar género/categoría/estrellas:', e)
+    elif os.path.exists(GENRE_MODEL): print(f'Género/categoría/estrellas: {nmeta}/{max(3, n // 3)} correcciones nuevas.')
     nm = _newer(LEARN_MARKS_DIR, MARKS_MODEL); tot = len([x for x in os.listdir(LEARN_MARKS_DIR) if x.endswith('.npz')]) if os.path.isdir(LEARN_MARKS_DIR) else 0
     have = os.path.exists(MARKS_MODEL); xml_ok = bool(xml_path) and os.path.exists(xml_path)
     if have and nm >= n:

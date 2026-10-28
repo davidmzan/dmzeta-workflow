@@ -59,3 +59,10 @@ GENRE_MODEL = os.path.join(DATA, 'model_genre.npz')
 CATS = [('Pink', 'FF007F'), ('Review', 'FF0000'), ('Build Up', 'FFA500'), ('Warm Up', 'FFFF00'), ('Peak Time', '00FF00'), ('Chill Out', '25FDE9'), ('Samples', '0000FF'), ('Closing', '660099')]
 
 CAT_HEX = {n: h for n, h in CATS}; HEX_CAT = {h: n for n, h in CATS}
+
+
+# Cuánto pesa un ejemplo según su origen (la corrección pesa mucho más que dar algo por bueno sin tocarlo; lo no revisado no se aprende)
+W_CORRECTED = 3.0
+W_ACCEPTED = 0.5
+LEARN_META_DIR = os.path.join(DATA, 'learned_meta')
+MODEL_LOG = os.path.join(DATA, 'models_log.json')

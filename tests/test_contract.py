@@ -10,7 +10,7 @@ FIELDS = ('mashup', 'open_show', 'bars', 'type', 'aca_starter', 'after', 'short_
 
 
 def js_functions():
-    s = open(os.path.join(ROOT, 'workflow_ui.html'), encoding='utf-8').read()
+    s = open(os.path.join(ROOT, 'ui', 'js', '10-names.js'), encoding='utf-8').read()
     i = s.index('function parseName(n){'); j = s.index('const finalOf=')
     return s[i:j]
 

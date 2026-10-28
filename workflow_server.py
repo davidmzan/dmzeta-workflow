@@ -6,7 +6,8 @@ import djflow as dj
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CFG = os.path.join(dj.DATA, 'config.json')
-UI = os.path.join(HERE, 'workflow_ui.html')
+UI_DIR = os.path.join(HERE, 'ui')
+UI = os.path.join(UI_DIR, 'index.html')
 PING = [0.0]
 TOKEN = secrets.token_urlsafe(24)           # token de sesión: solo la página que sirve este servidor lo conoce (evita que otra web lance acciones contra el servidor local)
 MAX_BODY = 10 * 1024 * 1024                  # tope de cuerpo de las peticiones
@@ -133,7 +134,7 @@ class H(BaseHTTPRequestHandler):
         return d
     def host_ok(s): return (s.headers.get('Host') or '').split(':')[0] in ('127.0.0.1', 'localhost')
 
-    CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    CSP = "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
     def end_headers(s):
         s.send_header('X-Content-Type-Options', 'nosniff'); s.send_header('X-Frame-Options', 'DENY'); s.send_header('Referrer-Policy', 'no-referrer')
@@ -150,7 +151,7 @@ class H(BaseHTTPRequestHandler):
         return sf in (None, '', 'same-origin', 'none')
 
     def authed(s, path):
-        if path in ('/', '/index.html', '/api/ping'): return True
+        if path in ('/', '/index.html', '/api/ping') or path.startswith('/ui/'): return True
         return secrets.compare_digest(s.headers.get('X-WF-Token') or '', TOKEN)
 
     def do_GET(s):
@@ -160,6 +161,13 @@ class H(BaseHTTPRequestHandler):
         try:
             if u.path in ('/', '/index.html'):
                 b = open(UI, 'rb').read().replace(b'__WF_TOKEN__', TOKEN.encode()); s.send_response(200); s.send_header('Content-Type', 'text/html; charset=utf-8'); s.send_header('Content-Length', str(len(b))); s.send_header('Cache-Control', 'no-store'); s.end_headers(); s.wfile.write(b); return
+            if u.path.startswith('/ui/'):                                     # estáticos de la interfaz: solo css/ y js/ con nombres simples
+                rel = u.path[4:]
+                if not re.fullmatch(r'(css|js)/[A-Za-z0-9._-]+\.(css|js)', rel): return s.send_error(404)
+                fp = os.path.realpath(os.path.join(UI_DIR, rel))
+                if not fp.startswith(os.path.realpath(UI_DIR) + os.sep) or not os.path.isfile(fp): return s.send_error(404)
+                b = open(fp, 'rb').read(); s.send_response(200); s.send_header('Content-Type', 'text/css; charset=utf-8' if fp.endswith('.css') else 'text/javascript; charset=utf-8')
+                s.send_header('Content-Length', str(len(b))); s.send_header('Cache-Control', 'no-store'); s.end_headers(); s.wfile.write(b); return
             if u.path == '/api/ping': PING[0] = time.time(); return s.send_json(dict(ok=True))
             if u.path == '/api/state':
                 c = load_cfg(); h = dj.last_history(); return s.send_json(dict(genres=dj.xml_genres(c.get('xml', '')), genre_model=os.path.exists(dj.GENRE_MODEL), cfg=c, model=os.path.exists(dj.MODEL_PATH), marks_model=os.path.exists(dj.MARKS_MODEL), undo=bool(h), learned=len(os.listdir(dj.LEARN_DIR)) if os.path.isdir(dj.LEARN_DIR) else 0, new_examples=new_examples(), new_marks=dj._newer(dj.LEARN_MARKS_DIR, dj.MARKS_MODEL), loop_len=dj._pref('loops', 8), grid_bias_ms=round(dj.grid_bias() * 1000), grid_samples=len(dj.load_prefs().get('grid') or [])))
@@ -185,6 +193,10 @@ class H(BaseHTTPRequestHandler):
                 f = q.get('folder', '')
                 if not folder_ok(f): return s.send_json(dict(error='carpeta no permitida'), 403)
                 return s.send_json(dict(rows=read_review(f)))
+            if u.path == '/api/quality':
+                log = dj.load_model_log(); latest = {}
+                for e in log: latest[e['model']] = e
+                return s.send_json(dict(latest=list(latest.values()), history=log[-60:]))
             if u.path == '/api/job':
                 j = JOBS.get(q.get('id')); return s.send_json(dict(j, log=j['log'][-60:]) if j else dict(status='missing'))
             if u.path == '/api/track':

@@ -49,6 +49,7 @@ A few engineering decisions worth calling out:
 - **No ML framework.** Models are multinomial logistic regression written in NumPy (`Softmax.fit/dump/load`) with per-class and per-sample weights, so the whole thing installs with `numpy` and `ffmpeg` only.
 - **Models must earn their place.** Every trained model is cross-validated against a *majority-class baseline*. If it does not beat the baseline by a margin, it switches itself off and the field is left to the human (this is what happens to the START MIX model today).
 - **Per-file MP3 decoder delay.** Rekordbox does not trim the encoder delay that ffmpeg trims for LAME-tagged MP3s, so cues landed ~38 ms early on those files. The exporter reads `start_time` via `ffprobe` and compensates per file; files without the tag are left alone.
+- **Learning that weighs your own corrections.** Examples you corrected count 3×, ones you only accepted 0.5×, unreviewed tracks are not learned from; every retrain is logged and shown in a model-quality panel.
 - **Atomic, reversible edits.** Renames go through a history log with backups; learned state lives in plain files (`.npz`, `.json`) next to the code.
 
 ## Results and honest limitations
@@ -86,12 +87,13 @@ python3 workflow_server.py        # opens the app in your browser
 ./run_tests.command        # or: python3 -m unittest discover -s tests -v
 ```
 
-Thirty-eight tests run in about five seconds on synthetic audio, in a throw-away data directory (`DJFLOW_HOME`):
+Forty-nine tests run in about fifteen seconds on synthetic audio, in a throw-away data directory (`DJFLOW_HOME`):
 
 - **Golden snapshot** of the exported Rekordbox XML (cue positions, colours, names, loop, tempo): any accidental change fails the build.
 - **Contract tests**: the naming grammar exists in Python and in JavaScript and is checked for parity with Node.
 - **Server security tests** (token, cross-origin, DNS rebinding, folder allow-list, path traversal, range handling, body limits, config validation).
 - **End-to-end flow**: analyse, review, rename, export cues, undo.
+- **UI tests**: `index.html` references exactly the CSS/JS files on disk, each script parses, the static route rejects traversal, and a Node harness boots the whole UI in demo mode with a stubbed DOM.
 - **Static guards**: no undefined names in any module, layers import only from lower layers, no personal data tracked by git.
 
 A `pre-commit` hook and GitHub Actions run the same suite; `./guardar_version.command "message"` commits only when it passes.
@@ -103,7 +105,8 @@ djflow.py            compatibility facade + CLI (re-exports the engine)
 djcore/              the engine, one layer per module; each imports only from the ones above it
   config  storage  names  audio  grid  preview  features  models  prediction  training  cues  commands
 workflow_server.py   local HTTP API (token, origin checks, allow-listed folders, jobs)
-workflow_ui.html     single-file frontend (Web Audio waveform editor, pads, memory cues)
+ui/                  frontend: index.html + css/ (6 files) + js/ (11 files, loaded in order)
+                     (Web Audio waveform editor, pads, memory cues, model-quality panel)
 djflow_app.py        optional Tk desktop window
 tests/               unit, contract, security, end-to-end and static tests
 ```
