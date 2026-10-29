@@ -32,3 +32,5 @@ djcore/main_text.txt
 .mypy_cache/
 .ruff_cache/
 build/
+bpm_fixes.json
+tests/*.new

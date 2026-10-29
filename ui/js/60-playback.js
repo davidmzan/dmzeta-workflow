@@ -34,6 +34,7 @@ async function loadQuality(){
     const pct=v=>v==null?'—':Math.round(v*100)+' %';
     el.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:12px"><tr style="opacity:.6;text-align:left"><th>Modelo</th><th>Ejemplos</th><th>Tuyos</th><th>Acierto</th><th>Referencia</th><th>Estado</th></tr>'+
       q.latest.map(e=>`<tr style="border-top:1px solid var(--line)"><td>${esc(MODEL_NAMES[e.model]||e.model)}<div style="opacity:.5;font-size:10px">${esc(e.when||'')}</div></td><td>${e.n??'—'}</td><td>${e.n_user??'—'}</td><td>${pct(e.accuracy)}</td><td>${pct(e.baseline)}</td><td>${e.enabled===false?'<span style="color:#f59e0b">apagado</span>':'<span style="color:#34d399">activo</span>'}</td></tr>`).join('')+'</table>';
+    const bf=q.bpm_fixes;if(bf&&bf.total)el.innerHTML+=`<p style="font-size:12px;opacity:.75;margin-top:8px">Correcciones de BPM: <b>${bf.total}</b>, de ellas ×2 / ×0,5: <b>${bf.double_half}</b>.</p>`;
   }catch(e){el.textContent='No se pudo cargar la calidad de los modelos.';}
 }
 async function regrid(r){

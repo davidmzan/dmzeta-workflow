@@ -107,6 +107,36 @@ class WorkflowTest(ServerBase):
             time.sleep(0.25)
         self.assertEqual(j['status'], 'done', j.get('error')); self.assertTrue(os.path.exists(os.path.join(self.folder, 'djflow_cues.xml')))
 
+    def test_watchdog_decision(self):
+        """El servidor solo se cierra si la ventana lleva > idle sin pings y no hay trabajo ni diálogo abierto (causa del 'Failed to fetch' al elegir otra carpeta)."""
+        sc = ws.should_close
+        self.assertFalse(sc(1000, 0, False, 90))                    # aún no hubo ningún ping
+        self.assertFalse(sc(1000, 950, False, 90))                  # 50 s: pestaña en segundo plano, sigue vivo
+        self.assertFalse(sc(1000, 100, True, 90))                   # trabajo o diálogo en curso
+        self.assertTrue(sc(1000, 100, False, 90))                   # ventana cerrada de verdad
+        self.assertGreaterEqual(ws.IDLE_DEFAULT, 300)
+
+    def test_pick_keeps_server_alive(self):
+        orig = ws.subprocess.run; seen = []
+        def fake(*a, **k): seen.append(ws.PICKING[0]); return type('R', (), dict(returncode=0, stdout='/tmp/x/\n'))()
+        ws.subprocess.run = fake; plat = ws.sys.platform; ws.sys.platform = 'darwin'
+        try: path = ws.pick('folder')
+        finally: ws.subprocess.run = orig; ws.sys.platform = plat
+        self.assertEqual(path, '/tmp/x'); self.assertEqual(seen, [1]); self.assertEqual(ws.PICKING[0], 0)
+
+    def test_bpm_fix_log(self):
+        """Contador de correcciones de BPM: cuenta ×2 / ×0.5, una pista cuenta una vez, y rechaza basura."""
+        if os.path.exists(dj.BPM_FIX_LOG): os.remove(dj.BPM_FIX_LOG)
+        self.assertEqual(dj.bpm_factor(82, 164), 2.0); self.assertEqual(dj.bpm_factor(170, 85), 0.5); self.assertIsNone(dj.bpm_factor(120, 128)); self.assertIsNone(dj.bpm_factor('x', 1))
+        self.assertTrue(self.js('POST', '/api/bpmfix', {'name': 'a.mp3', 'detected': 82, 'corrected': 164})[1]['ok'])
+        self.assertTrue(self.js('POST', '/api/bpmfix', {'name': 'a.mp3', 'detected': 82, 'corrected': 164})[1]['ok'])       # misma pista: no se duplica
+        self.assertTrue(self.js('POST', '/api/bpmfix', {'name': '../../b.mp3', 'detected': 120, 'corrected': 125})[1]['ok'])
+        for bad in ({'name': 'c.mp3', 'detected': -5, 'corrected': 100}, {'name': 'c.mp3', 'detected': 'x', 'corrected': 100}, {'name': 5, 'detected': 80, 'corrected': 160}, {'name': 'c.mp3', 'detected': True, 'corrected': 100}, {'name': 'c.mp3', 'detected': 80, 'corrected': 9999}):
+            self.assertFalse(self.js('POST', '/api/bpmfix', bad)[1]['ok'], bad)
+        sm = self.js('GET', '/api/quality')[1]['bpm_fixes']; self.assertEqual((sm['total'], sm['double_half']), (2, 1))
+        self.assertEqual([e['name'] for e in sm['last']], ['a.mp3', 'b.mp3'])                                                 # el nombre se reduce a basename
+        self.assertEqual(self.js('POST', '/api/bpmfix', {'name': 'a.mp3', 'detected': 1, 'corrected': 2}, token=False)[0], 401)
+
     def test_track_endpoint(self):
         st, d = self.js('GET', '/api/track?folder=' + urllib.parse.quote(self.folder) + '&name=' + urllib.parse.quote(self.audio) + '&bpm=120')
         self.assertEqual(st, 200); self.assertAlmostEqual(d['bpm'], 120, delta=2); self.assertGreaterEqual(d['t0'], 0)

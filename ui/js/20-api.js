@@ -3,7 +3,10 @@
 const TOKEN=(document.querySelector('meta[name=wf-token]')||{}).content||'';
 async function api(path,body){
   if(DEMO) return demoApi(path,body);
-  const r=await fetch(path,body!==undefined?{method:'POST',headers:{'Content-Type':'application/json','X-WF-Token':TOKEN},body:JSON.stringify(body)}:{headers:{'X-WF-Token':TOKEN}}); return r.json();
+  let r;
+  try{r=await fetch(path,body!==undefined?{method:'POST',headers:{'Content-Type':'application/json','X-WF-Token':TOKEN},body:JSON.stringify(body)}:{headers:{'X-WF-Token':TOKEN}});}
+  catch(e){throw new Error('No se puede contactar con el servidor local (¿se cerró?). Vuelve a abrir Dmzeta Workflow.');}
+  return r.json();
 }
 async function runJob(title,id,onDone){
   const t=$('#toast'),T=$('#tT'),B=$('#tB'),L=$('#tL'); t.classList.remove('err'); t.classList.add('show'); T.textContent=title+'…'; B.classList.add('ind'); B.firstElementChild.style.width=''; L.textContent='';

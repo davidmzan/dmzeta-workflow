@@ -8,7 +8,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CFG = os.path.join(dj.DATA, 'config.json')  # type: ignore[attr-defined]  # la fachada copia los nombres en tiempo de ejecución
 UI_DIR = os.path.join(HERE, 'ui')
 UI = os.path.join(UI_DIR, 'index.html')
-PING = [0.0]
+PING = [0.0]                                 # último ping (time.monotonic: no avanza mientras el Mac duerme, así que dormir no cuenta como ventana cerrada)
+PICKING = [0]                                # >0 mientras hay un diálogo nativo de carpeta/archivo abierto (el navegador queda en segundo plano y deja de enviar pings)
 TOKEN = secrets.token_urlsafe(24)           # token de sesión: solo la página que sirve este servidor lo conoce (evita que otra web lance acciones contra el servidor local)
 MAX_BODY = 10 * 1024 * 1024                  # tope de cuerpo de las peticiones
 MAX_JOBS = 40
@@ -119,7 +120,9 @@ def pick(kind):
     if kind == 'folder': body = 'POSIX path of (choose folder with prompt "Elige la carpeta")'
     else: body = 'POSIX path of (choose file with prompt "Elige el rekordbox.xml" of type {"xml","public.xml"})'
     script = 'tell application "System Events"\nactivate\nset p to ' + body + '\nend tell\nreturn p'
-    r = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
+    PICKING[0] += 1
+    try: r = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
+    finally: PICKING[0] -= 1; PING[0] = time.time()
     return r.stdout.strip().rstrip('/') if r.returncode == 0 and r.stdout.strip() else None
 
 class H(BaseHTTPRequestHandler):
@@ -168,7 +171,7 @@ class H(BaseHTTPRequestHandler):
                 if not fp.startswith(os.path.realpath(UI_DIR) + os.sep) or not os.path.isfile(fp): return s.send_error(404)
                 b = open(fp, 'rb').read(); s.send_response(200); s.send_header('Content-Type', 'text/css; charset=utf-8' if fp.endswith('.css') else 'text/javascript; charset=utf-8')
                 s.send_header('Content-Length', str(len(b))); s.send_header('Cache-Control', 'no-store'); s.end_headers(); s.wfile.write(b); return
-            if u.path == '/api/ping': PING[0] = time.time(); return s.send_json(dict(ok=True))
+            if u.path == '/api/ping': PING[0] = time.monotonic(); return s.send_json(dict(ok=True))
             if u.path == '/api/state':
                 c = load_cfg(); h = dj.last_history(); return s.send_json(dict(genres=dj.xml_genres(c.get('xml', '')), genre_model=os.path.exists(dj.GENRE_MODEL), cfg=c, model=os.path.exists(dj.MODEL_PATH), marks_model=os.path.exists(dj.MARKS_MODEL), undo=bool(h), learned=len(os.listdir(dj.LEARN_DIR)) if os.path.isdir(dj.LEARN_DIR) else 0, new_examples=new_examples(), new_marks=dj._newer(dj.LEARN_MARKS_DIR, dj.MARKS_MODEL), loop_len=dj._pref('loops', 8), grid_bias_ms=round(dj.grid_bias() * 1000), grid_samples=len(dj.load_prefs().get('grid') or [])))
             if u.path == '/api/rules':
@@ -196,7 +199,7 @@ class H(BaseHTTPRequestHandler):
             if u.path == '/api/quality':
                 log = dj.load_model_log(); latest = {}
                 for e in log: latest[e['model']] = e
-                return s.send_json(dict(latest=list(latest.values()), history=log[-60:]))
+                return s.send_json(dict(latest=list(latest.values()), history=log[-60:], bpm_fixes=dj.bpm_fix_summary()))
             if u.path == '/api/job':
                 j = JOBS.get(q.get('id')); return s.send_json(dict(j, log=j['log'][-60:]) if j else dict(status='missing'))
             if u.path == '/api/track':
@@ -260,6 +263,9 @@ class H(BaseHTTPRequestHandler):
                 f = d['folder']
                 if not folder_ok(f): return s.send_json(dict(error='carpeta no permitida'), 403)
                 write_review(f, d['rows'], d.get('marks')); return s.send_json(dict(ok=True))
+            if u.path == '/api/bpmfix':
+                ok = isinstance(d.get('name'), str) and all(isinstance(d.get(k), (int, float)) and not isinstance(d.get(k), bool) and 20 <= d[k] <= 400 for k in ('detected', 'corrected'))
+                return s.send_json(dict(ok=bool(ok and dj.log_bpm_fix(d['name'], d['detected'], d['corrected']))))
             if u.path == '/api/apply':
                 f = d['folder']
                 if not folder_ok(f): return s.send_json(dict(error='carpeta no permitida'), 403)
@@ -299,13 +305,21 @@ def open_window(url):
                 subprocess.Popen(['open', '-na', app, '--args', f'--app={url}', '--window-size=1500,940']); return
     webbrowser.open(url)
 
+IDLE_DEFAULT = 600.0    # 10 min: pestañas en segundo plano, suspendidas o dormidas dejan de hacer ping; cerrar la ventana solo deja el proceso vivo unos minutos
+
+
+def should_close(now, last_ping, busy, idle):
+    """True si la ventana lleva más de `idle` s sin dar señales y no hay nada en curso."""
+    return bool(last_ping) and not busy and now - last_ping > idle
+
+
 def watchdog(srv):
     """Cierra el servidor cuando se cierra la ventana (sin pings ~30 s) y no hay trabajos en marcha."""
     while True:
         time.sleep(3)
-        busy = any(j['status'] == 'running' for j in JOBS.values())
-        if PING[0] and time.time() - PING[0] > float(os.environ.get('WF_IDLE', 30)) and not busy:
-            print('Ventana cerrada: cerrando servidor.', file=sys.__stdout__); os._exit(0)
+        busy = any(j['status'] == 'running' for j in JOBS.values()) or PICKING[0] > 0
+        if should_close(time.monotonic(), PING[0], busy, float(os.environ.get('WF_IDLE', IDLE_DEFAULT))):
+            print(time.strftime('%H:%M:%S'), 'Sin señales de la ventana: cerrando servidor.', file=sys.__stdout__); os._exit(0)
 
 def already_running():
     import urllib.request

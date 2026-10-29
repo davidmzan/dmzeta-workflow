@@ -22,7 +22,7 @@ function renderInsp(){
   el.innerHTML=`
    <div><div class="lbl">Título</div><input class="fld big" id="fBase" value="${esc(p.base)}" spellcheck="false"><div class="orig" title="${esc(r.original)}">Original · ${esc(r.original)}</div></div>
    <div class="row2"><div><div class="lbl">Artista(s) · separados por comas</div><input class="fld" id="fArt" value="${esc(r.artist)}" spellcheck="false"></div>
-     <div class="row2" style="gap:10px"><div><div class="lbl">Tono</div><input class="fld" id="fKey" value="${esc(p.key||'')}" maxlength="3" style="text-transform:uppercase"></div><div><div class="lbl">BPM</div><input class="fld" id="fBpm" value="${p.bpm||''}" inputmode="numeric"></div></div></div>
+     <div class="row2" style="gap:10px"><div><div class="lbl">Tono</div><input class="fld" id="fKey" value="${esc(p.key||'')}" maxlength="3" style="text-transform:uppercase"></div><div><div class="lbl">BPM</div><div style="display:flex;gap:5px"><input class="fld" id="fBpm" value="${p.bpm||''}" inputmode="decimal" style="min-width:0"><button class="btn sm ghost" id="fBpmH" title="Mitad de BPM" type="button">÷2</button><button class="btn sm ghost" id="fBpmD" title="Doble de BPM" type="button">×2</button></div></div></div></div>
    <div><div class="lbl">Nombre final · puedes editarlo a mano</div><div class="preview" id="fPrev">${previewHTML(r)}</div><input class="fld" id="fFinal" value="${esc(r.final)}" spellcheck="false" style="margin-top:8px;font-family:ui-monospace,Menlo,monospace;font-size:13px"></div>
    <div class="row2"><div><div class="lbl">Extended (compases y tipo)</div><div class="seg" id="sBars">${bars}</div></div><div><div class="lbl">Tipo</div><div class="seg t" id="sTy">${types}</div></div></div>
    <div><div class="lbl">Marcas del nombre</div><div class="tg" id="tgs">${T('mashup','Mashup',p.mashup)}${T('open_show','Open Show',p.open_show)}${T('aca_starter','Aca Starter',p.aca_starter)}${T('In Aca','In Aca',p.after==='In Aca')}${T('In Hype','In Hype',p.after==='In Hype')}${T('short_edit','Short Edit',p.short_edit)}${T('aca_out','Aca Out',p.aca_out)}</div></div>
@@ -42,6 +42,11 @@ function renderInsp(){
   $('#fFinal').oninput=e=>{const v=e.target.value;r.final=v.trim();r.reviewed=true;const n=parseName(v+'.mp3');if(!n.key)n.key=p.key;if(!n.bpm)n.bpm=p.bpm;Object.assign(p,n);$('#fPrev').innerHTML=previewHTML(r);patchCard(S.sel);queueSave();};
   $('#fFinal').onchange=()=>renderInsp();
   $('#fKey').oninput=e=>{p.key=e.target.value.toUpperCase();upd();}; $('#fBpm').oninput=e=>{p.bpm=parseFloat(e.target.value)||0;upd();};
+  // Si cambias el BPM de forma notable (p. ej. 82 → 164), el grid se recalcula con ese tempo; si no, la onda seguiría mostrando el anterior.
+  const applyBpm=async()=>{if(!(p.bpm>0)||!D.bpm||D.name!==r.original||Math.abs(p.bpm-D.bpm)/D.bpm<0.01)return;setMsg('BPM cambiado: reanalizando grid…',true);try{api('/api/bpmfix',{name:r.original,detected:D.bpm,corrected:p.bpm}).catch(()=>{});await regrid(r);await loadTrack(S.sel);setMsg('Grid recalculado a '+p.bpm+' BPM ✓');}catch(err){showErr(err);}};
+  $('#fBpm').onchange=applyBpm;
+  const scaleBpm=k=>{if(!(p.bpm>0))return;p.bpm=+(p.bpm*k).toFixed(2);$('#fBpm').value=p.bpm;upd();applyBpm();};
+  $('#fBpmH').onclick=()=>scaleBpm(0.5); $('#fBpmD').onclick=()=>scaleBpm(2);
   $('#sBars').onclick=e=>{const b=e.target.dataset.b;if(!b)return;if(p.bars===+b&&!p.aca_starter){p.bars=null;p.type=null;}else{p.bars=+b;p.aca_starter=false;if(!p.type)p.type='POE';}r.final=finalOf(r);r.reviewed=true;renderInsp();patchCard(S.sel);queueSave();drawDeck();};
   $('#sTy').onclick=e=>{const t=e.target.dataset.ty;if(!t)return;if(p.type===t&&!p.aca_starter){p.type=null;p.bars=null;}else{p.type=t;p.aca_starter=false;if(!p.bars)p.bars=8;}r.final=finalOf(r);r.reviewed=true;renderInsp();patchCard(S.sel);queueSave();drawDeck();};
   $('#tgs').onclick=e=>{const t=e.target.dataset.t;if(!t)return;

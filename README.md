@@ -12,7 +12,7 @@ Rename · tag · beat-grid · cue-point → **Rekordbox-ready XML**
 ![Python](https://img.shields.io/badge/python-3.10%20%7C%203.12-3776AB?logo=python&logoColor=white)
 ![NumPy](https://img.shields.io/badge/NumPy-hand--rolled%20models-013243?logo=numpy&logoColor=white)
 ![Lint](https://img.shields.io/badge/lint-ruff%20%2B%20mypy-261230)
-![Tests](https://img.shields.io/badge/tests-49%20passing-2ea44f)
+![Tests](https://img.shields.io/badge/tests-53%20passing-2ea44f)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 </div>
@@ -26,7 +26,7 @@ Rename · tag · beat-grid · cue-point → **Rekordbox-ready XML**
 | **Problem** | Prepping one track meant 4 tools (Mixed In Key, Platinum Notes, Rekordbox, Metadatics) and minutes of repetitive clicking. |
 | **Solution** | One local web app that proposes everything, lets you fix it on the waveform, then writes the renamed files and a Rekordbox XML. |
 | **Twist** | It learns from *your* corrections: what you fix counts 3×, what you only accept 0.5×. |
-| **Engineering** | Layered engine, hardened local server, 49 tests, CI with lint and type checks. No ML framework, only NumPy. |
+| **Engineering** | Layered engine, hardened local server, 53 tests, CI with lint and type checks. No ML framework, only NumPy. |
 
 ## 🎯 What it does
 
@@ -104,7 +104,7 @@ python3 -m venv .venv && .venv/bin/pip install -e .
 ./run_tests.command        # or: python3 -m unittest discover -s tests -v
 ```
 
-49 tests run in about 15 seconds on synthetic audio, in a throw-away data directory (`DJFLOW_HOME`).
+53 tests run in about 15 seconds on synthetic audio, in a throw-away data directory (`DJFLOW_HOME`).
 
 | Layer | What it protects |
 | :--- | :--- |

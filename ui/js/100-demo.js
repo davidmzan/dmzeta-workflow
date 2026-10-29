@@ -31,7 +31,8 @@ const DEMO_ROWS=[
 let demoJob=0;
 async function demoApi(path,body){
   await new Promise(r=>setTimeout(r,40));
-  if(path.startsWith('/api/quality'))return{latest:[{model:'names',when:'demo',n:48,n_user:12,accuracy:.85,baseline:null,enabled:true},{model:'cvox',when:'demo',n:27,n_user:9,accuracy:.78,baseline:.67,enabled:true},{model:'start_mix',when:'demo',n:1234,n_user:34,accuracy:.21,baseline:.17,enabled:false}],history:[]};
+  if(path.startsWith('/api/bpmfix'))return{ok:true};
+  if(path.startsWith('/api/quality'))return{bpm_fixes:{total:5,double_half:3,last:[]},latest:[{model:'names',when:'demo',n:48,n_user:12,accuracy:.85,baseline:null,enabled:true},{model:'cvox',when:'demo',n:27,n_user:9,accuracy:.78,baseline:.67,enabled:true},{model:'start_mix',when:'demo',n:1234,n_user:34,accuracy:.21,baseline:.17,enabled:false}],history:[]};
   if(path.startsWith('/api/state'))return{cfg:{train:['/Users/demo/Music/Library/Latin/2026/Brunch','/Users/demo/Music/Library/Latin/2025/Dembow'],xml:'/Users/demo/djflow/rekordbox.xml',folder:'/Users/demo/Music/New',backup:true},model:true,marks_model:true,undo:true,learned:48};
   if(path.startsWith('/api/review')&&body===undefined)return{rows:DEMO_ROWS};
   if(path.startsWith('/api/track')){const n=decodeURIComponent((path.match(/name=([^&]*)/)||[])[1]||'');const r=DEMO_ROWS.find(x=>x.original===n);return{t0:.05+(DEMO_ROWS.indexOf(r)%3)*.01,bpm:r?r.parsed.bpm:100,score:2};}
@@ -43,4 +44,4 @@ async function demoApi(path,body){
 window.addEventListener('error',e=>showErr(e.message+' @'+e.lineno));window.addEventListener('unhandledrejection',e=>showErr(String(e.reason&&e.reason.stack||e.reason)));
 function showErr(m){let b=document.getElementById('errbox');if(!b){b=document.createElement('pre');b.id='errbox';b.style.cssText='position:fixed;left:12px;right:12px;bottom:12px;z-index:99;background:#300;color:#fbb;padding:10px;border-radius:10px;font:11px ui-monospace,monospace;white-space:pre-wrap;max-height:30vh;overflow:auto';document.body.append(b);}b.textContent+=m+'\n';}
 init().catch(e=>showErr(String(e&&e.stack||e)));
-if(!DEMO){const ping=()=>fetch('/api/ping').catch(()=>{});ping();setInterval(ping,5000);}
+if(!DEMO){const ping=()=>fetch('/api/ping').catch(()=>{});ping();setInterval(ping,5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)ping();});window.addEventListener('focus',ping);}

@@ -1,7 +1,7 @@
 """Lectura y escritura de estado en disco (atómica): marcas, preferencias, registro de pistas ya procesadas."""
 import os, json, time
 import numpy as np
-from .config import DONE_FILE, EXT, MARKS_FILE, MODEL_LOG, PREFS_FILE
+from .config import BPM_FIX_LOG, DONE_FILE, EXT, MARKS_FILE, MODEL_LOG, PREFS_FILE
 
 def atomic_write_bytes(path, data):
     """Escribe en un archivo temporal y lo renombra: si algo falla a medias, el archivo anterior queda intacto."""
@@ -70,3 +70,31 @@ def learn_weight(edited, accepted):
     """Peso de un ejemplo: corregido por ti = alto; aceptado con ✓ = bajo; sin revisar = 0 (no se aprende)."""
     from .config import W_ACCEPTED, W_CORRECTED
     return W_CORRECTED if edited else (W_ACCEPTED if accepted else 0.0)
+
+
+def bpm_factor(detected, corrected):
+    """2.0 si corregiste al doble, 0.5 si a la mitad (±3 %), None en cualquier otro caso."""
+    try: d, c = float(detected), float(corrected)
+    except (TypeError, ValueError): return None
+    if d <= 0 or c <= 0: return None
+    for f in (2.0, 0.5):
+        if abs(c / d - f) / f < 0.03: return f
+    return None
+
+def load_bpm_fixes():
+    try: return json.load(open(BPM_FIX_LOG, encoding='utf-8'))
+    except Exception: return []
+
+def log_bpm_fix(name, detected, corrected):
+    """Anota una corrección de BPM. Una pista corregida varias veces solo cuenta la última; se guardan como máximo 500."""
+    name = os.path.basename(str(name))
+    try: d, c = float(detected), float(corrected)
+    except (TypeError, ValueError): return False
+    if not name or d <= 0 or c <= 0: return False
+    fixes = [e for e in load_bpm_fixes() if e.get('name') != name]
+    fixes.append(dict(name=name, when=time.strftime('%Y-%m-%d %H:%M:%S'), detected=round(float(detected), 2), corrected=round(float(corrected), 2), factor=bpm_factor(detected, corrected)))
+    atomic_write_json(BPM_FIX_LOG, fixes[-500:]); return True
+
+def bpm_fix_summary():
+    fx = load_bpm_fixes()
+    return dict(total=len(fx), double_half=sum(1 for e in fx if e.get('factor')), last=fx[-10:])

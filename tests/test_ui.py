@@ -24,6 +24,10 @@ class StructureTest(unittest.TestCase):
             src = open(os.path.join(UI, f), encoding='utf-8').read(); self.assertTrue(src.startswith("'use strict';"), f)
             r = subprocess.run(['node', '--check', os.path.join(UI, f)], capture_output=True, text=True); self.assertEqual(r.returncode, 0, f + ': ' + r.stderr)
 
+    def test_bpm_scale_buttons_wired(self):
+        src = open(os.path.join(UI, 'js', '40-inspector.js'), encoding='utf-8').read()
+        for k in ('id="fBpmH"', 'id="fBpmD"', "$('#fBpmH').onclick", "$('#fBpmD').onclick", 'scaleBpm(0.5)', 'scaleBpm(2)'): self.assertIn(k, src)
+
     def test_no_inline_script_left_in_index(self):
         self.assertIsNone(re.search(r'<script>(?!\s*</script>)', INDEX)); self.assertNotIn('<style>', INDEX)
 
