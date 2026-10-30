@@ -2,6 +2,7 @@
 
 ## Sin publicar
 
+- Todo el aprendizaje usa solo las pistas que aplicas, ya no el rekordbox.xml. START MIX pasa de 23 % a 38 % exacto (referencia 19 %) y se activa; género, categoría y estrellas se entrenan desde tus ejemplos (se crean solos al llegar a 40). El botón de Ajustes pasa a «Reentrenar con mis pistas» y ya no pide el XML.
 - La app ya no hace zoom del navegador (pinch, Ctrl/⌘+rueda, ⌘+/−/0): solo se hace zoom en la onda y en la mini onda con la rueda.
 - Con 4 compases el color rojo/lima (y tu elección manual) va en el hot cue B, donde acaba el extender; con el resto va en el C. El botón pasa a llamarse COLOR B / COLOR C según la pista. La cabecera de Ajustes queda fija al hacer scroll.
 - Si dos pistas acaban con el mismo nombre final, la segunda se renombra con `(2)`, `(3)`… (antes se saltaba); nunca se sobrescribe. `models_log.json` deja de versionarse.

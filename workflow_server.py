@@ -283,7 +283,7 @@ class H(BaseHTTPRequestHandler):
                 if d.get('folder') and not folder_ok(d['folder']): return s.send_json(dict(error='carpeta no permitida'), 403)
                 return s.send_json(dict(job=run_job('Deshaciendo', lambda: dj.cmd_undo(d.get('folder') or None))))
             if u.path == '/api/train': return s.send_json(dict(job=run_job('Entrenando', lambda: (dj.cmd_train(*c['train']), open(os.path.join(dj.DATA, 'informe.md'), encoding='utf-8').read())[1])))
-            if u.path == '/api/train_marks': return s.send_json(dict(job=run_job('Aprendiendo START MIX', lambda: (None, dj.learn_from_xml(c['xml']))[1])))
+            if u.path == '/api/train_marks': return s.send_json(dict(job=run_job('Aprendiendo START MIX', lambda: dj.learn_from_xml(''))))
             if u.path == '/api/reveal':
                 p = os.path.abspath(d.get('path', '')) if isinstance(d.get('path'), str) else ''
                 if p and os.path.exists(p) and any(p == a or p.startswith(a + os.sep) for a in ALLOWED): subprocess.Popen(['open', '-R', p])

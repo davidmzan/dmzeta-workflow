@@ -1,7 +1,7 @@
 """Entrenamiento y aprendizaje automático a partir de tu colección y de tus correcciones."""
-import os, re, shutil, hashlib
+import os, shutil, hashlib
 import numpy as np
-from .config import CANDS, CVOX_MODEL, DATA, EXT, GENRE_MODEL, HEX_CAT, LEARN_CVOX_DIR, LEARN_DIR, LEARN_MARKS_DIR, LEARN_META_DIR, LIME_C, MARKS_MODEL, MODEL_PATH, PREFS_FILE, RED_C, START_KS_MAX, W_CORRECTED
+from .config import CANDS, CVOX_MODEL, DATA, EXT, GENRE_MODEL, LEARN_CVOX_DIR, LEARN_DIR, LEARN_MARKS_DIR, LEARN_META_DIR, LIME_C, MARKS_MODEL, MODEL_PATH, PREFS_FILE, RED_C, START_KS_MAX, W_CORRECTED
 from .storage import _pref, atomic_savez, atomic_write_json, learn_weight, load_marks, load_prefs, log_model
 from .names import parse_name
 from .audio import get_features, struct_matrix, track_bpm_key
@@ -87,29 +87,16 @@ def cmd_train(*folders):
     with open(os.path.join(DATA, 'informe.md'), 'w', encoding='utf-8') as fh: fh.write('\n'.join(report) + '\n')
     print('\n' + '\n'.join(report) + f'\n\nModelo guardado en {MODEL_PATH}\nInforme en {os.path.join(DATA, "informe.md")}')
 
-def cmd_train_marks(xml_path, limit=1200):
-    """Aprende dónde pones START MIX mirando tus pistas en rekordbox.xml (necesita los archivos de audio en las rutas del XML)."""
-    import xml.etree.ElementTree as ET
-    from urllib.parse import unquote
-    limit = int(limit); items = []
-    root = ET.parse(xml_path).getroot() if xml_path and os.path.exists(xml_path) else None
-    for x in (root.find('COLLECTION').findall('TRACK') if root is not None else []):
-        nm = x.get('Name') or ''; mm = re.search(r'- \d{1,2}[AB] - (\d+)$', nm)
-        if not mm: continue
-        loc = unquote((x.get('Location') or '').replace('file://localhost', '').replace('file://', ''))
-        if not os.path.exists(loc): continue
-        pm = x.findall('POSITION_MARK'); h0 = [p for p in pm if p.get('Num') == '0' and p.get('Type') == '0']
-        st = [p for p in pm if p.get('Num') == '4' and p.get('Type') == '0'] or [p for p in pm if p.get('Num') == '-1' and (p.get('Name') or '').strip().startswith('START MIX')]
-        bpm = float(x.get('AverageBpm') or 0) or float(mm.group(1))
-        if not (h0 and st) or bpm <= 0: continue
-        t0 = float(h0[0].get('Start')); sb = round((float(st[0].get('Start')) - t0) / (240.0 / bpm))
-        if 16 <= sb <= START_KS_MAX: items.append((loc, bpm, t0, int(round(sb / 4.0) * 4), parse_name(nm + '.mp3')['bars'] or 0))
+def cmd_train_marks(xml_path=None, limit=1200):
+    """Aprende dónde pones START MIX SOLO de las marcas que tú has confirmado al aplicar (carpeta learned_marks).
+    No usa tu rekordbox.xml: la colección antigua tiene criterios mezclados y empeoraba el modelo (23 % frente al 38 % con solo tus marcas)."""
+    items = []                                                       # (sin pistas del XML)
     learned = []
     if os.path.isdir(LEARN_MARKS_DIR):
         for fn in sorted(os.listdir(LEARN_MARKS_DIR)):
             if fn.endswith('.npz'): z = np.load(os.path.join(LEARN_MARKS_DIR, fn)); learned.append((z['A'], int(z['target']), float(z['weight']), int(z['N']) if 'N' in z.files else 0))
-    print(f'{len(items)} pistas con START MIX en el XML + {len(learned)} marcas tuyas aprendidas.')
-    if len(items) + len(learned) < 40: raise SystemExit('Hacen falta al menos 40 pistas con START MIX (de tu XML y de tus marcas). Revisa que las rutas del XML existan.')
+    print(f'{len(learned)} marcas tuyas aprendidas.')
+    if len(items) + len(learned) < 40: raise SystemExit('Hacen falta al menos 40 marcas START MIX tuyas (se guardan al pulsar Aplicar).')
     rng = np.random.RandomState(0); rng.shuffle(items); items = items[:limit]
     X, y, t, tg, W = [], [], [], [], []
     for ti, (loc, bpm, t0, target, N) in enumerate(items):
@@ -139,7 +126,7 @@ def cmd_train_marks(xml_path, limit=1200):
     store = {'start__off': np.array([0 if useful else 1])}; Softmax([0, 1]).fit(X, y, w=W).dump('start2', store); atomic_savez(MARKS_MODEL, **store)
     log_model('start_mix', n=int(tot), n_user=len(learned), accuracy=round(ex / max(tot, 1), 3), baseline=round(basepct / 100, 3), enabled=bool(useful))
     open(os.path.join(DATA, 'informe_marks.md'), 'w', encoding='utf-8').write('\n'.join(rep) + '\n'); print('\n' + '\n'.join(rep) + f'\n\nModelo guardado en {MARKS_MODEL}')
-    if xml_path and os.path.exists(xml_path):
+    if True:
         try: train_cvox(xml_path)
         except BaseException as e: print('No se pudo aprender el color del cue C:', e)
 
@@ -173,31 +160,13 @@ def xml_genres(xml_path):
         except Exception: _GEN_CACHE[k] = []
     return _GEN_CACHE[k]
 
-def train_genre(xml_path, limit=2500, min_n=25):
-    """Aprende el género de tu colección (campo Genre de rekordbox.xml) a partir del audio y el BPM."""
-    import xml.etree.ElementTree as ET
-    from urllib.parse import unquote
+def train_genre(xml_path=None, limit=2500, min_n=8, min_total=40):
+    """Aprende género, categoría y estrellas SOLO de lo que tú has corregido o dado por bueno al aplicar (carpeta learned_meta).
+    No usa tu rekordbox.xml. Los géneros con menos de `min_n` ejemplos se ignoran."""
     from collections import Counter
-    items = []
-    for x in ET.parse(xml_path).getroot().find('COLLECTION').findall('TRACK'):
-        g = (x.get('Genre') or '').strip(); bpm = float(x.get('AverageBpm') or 0)
-        if not g or bpm <= 0: continue
-        loc = unquote((x.get('Location') or '').replace('file://localhost', '').replace('file://', ''))
-        if not os.path.exists(loc): continue
-        h0 = [q for q in x.findall('POSITION_MARK') if q.get('Num') == '0' and q.get('Type') == '0']
-        cat = HEX_CAT.get((x.get('Colour') or '').replace('0x', '').upper(), ''); st = str(round(int(x.get('Rating') or 0) / 51)) if int(x.get('Rating') or 0) > 0 else ''
-        items.append((loc, bpm, float(h0[0].get('Start')) if h0 else 0.0, g, cat, st))
-    cnt = Counter(it[3] for it in items); keep = {g for g, c in cnt.items() if c >= int(min_n)}
-    items = [it for it in items if it[3] in keep]
-    print(f'Género: {len(items)} pistas con género y archivo accesible, {len(keep)} géneros con al menos {min_n} pistas.')
-    if len(items) < 150 or len(keep) < 3: print('Hacen falta al menos 150 pistas con género; no se entrena el género.'); return
-    rng = np.random.RandomState(0); rng.shuffle(items); items = items[:int(limit)]; X, y, t = [], [], []
+    X, y, t = [], [], []
     CY, SY, WY, WC, WS = [], [], [], [], []
-    for ti, (loc, bpm, t0, g, cat_, st_) in enumerate(items):
-        print(f'  [{ti + 1}/{len(items)}] {os.path.basename(loc)[:70]}', flush=True)
-        try: A, _ = struct_matrix(loc, bpm, t0)
-        except Exception as e: print('    error:', e); continue
-        X.append(genre_x(A, bpm)); y.append(g); t.append(ti); CY.append(cat_); SY.append(st_); WY.append(1.0); WC.append(1.0); WS.append(1.0)
+    items = []
     n_user = 0
     if os.path.isdir(LEARN_META_DIR):                                    # tus correcciones: pesan más que la colección (W_CORRECTED) o menos si solo diste ✓ (W_ACCEPTED)
         for j, fn in enumerate(sorted(x for x in os.listdir(LEARN_META_DIR) if x.endswith('.npz'))):
@@ -205,18 +174,22 @@ def train_genre(xml_path, limit=2500, min_n=25):
             WY.append(float(z['gw'])); WC.append(float(z['cw'])); WS.append(float(z['sw'])); t.append(len(items) + j); n_user += 1
     print(f'Ejemplos tuyos (correcciones y ✓): {n_user}.')
     X = np.array(X); store = {}; rep = []
-    gi = [i for i, v in enumerate(y) if v and WY[i] > 0]
+    if n_user < min_total: print(f'Hacen falta al menos {min_total} pistas tuyas con datos; tienes {n_user}. Se reintentará al juntar más.'); return
+    cnt = Counter(v for i, v in enumerate(y) if v and WY[i] > 0); keep = {g for g, c in cnt.items() if c >= int(min_n)}
+    gi = [i for i, v in enumerate(y) if v and WY[i] > 0 and v in keep]
+    if len(keep) < 2: print(f'Hacen falta al menos 2 géneros con {min_n} pistas tuyas cada uno.'); return
     ya = np.array([y[i] for i in gi]); Xg = X[gi]; tg = [t[i] for i in gi]; wg = np.array([WY[i] for i in gi]); classes = sorted(set(ya))
     P = cv_predict(Xg, ya, tg, classes, w=wg)
     top1 = float((np.array(classes)[P.argmax(1)] == ya).mean()); top3 = float(np.mean([ya[i] in np.array(classes)[np.argsort(-P[i])[:3]] for i in range(len(ya))]))
     base = Counter(ya).most_common(1)[0]; dist = ', '.join(f'{g} {c}' for g, c in Counter(ya).most_common(6))
-    rep = ['# Informe de género', f'Pistas: {len(ya)} (de ellas {n_user} tuyas) · géneros: {len(classes)}', f'- acierto del primero: {100 * top1:.0f} %', f'- el correcto entre los 3 primeros: {100 * top3:.0f} %',
+    rep = ['# Informe de género', f'Pistas tuyas: {len(ya)} · géneros: {len(classes)}', f'- acierto del primero: {100 * top1:.0f} %', f'- el correcto entre los 3 primeros: {100 * top3:.0f} %',
            f'- referencia (siempre «{base[0]}»): {100 * base[1] / len(ya):.0f} %', f'- reparto: {dist}']
-    Softmax(classes).fit(Xg, ya, w=wg).dump('genre', store)
-    log_model('genre', n=int(len(ya)), n_user=n_user, accuracy=round(top1, 3), baseline=round(base[1] / len(ya), 3), enabled=True)
+    ok_g = top1 >= base[1] / len(ya) + 0.05
+    Softmax(classes).fit(Xg, ya, w=wg).dump('genre', store); store['genre__off'] = np.array([0 if ok_g else 1])
+    log_model('genre', n=int(len(ya)), n_user=n_user, accuracy=round(top1, 3), baseline=round(base[1] / len(ya), 3), enabled=bool(ok_g))
     for nm, lab, wl, nom in (('cat', CY, WC, 'categoría (color)'), ('star', SY, WS, 'estrellas')):     # mismas características de audio, sin volver a analizar
         idx = [i for i, v in enumerate(lab) if v and wl[i] > 0]
-        if len(idx) < 150 or len(set(lab[i] for i in idx)) < 2: rep.append(f'- {nom}: pocas pistas con dato, no se aprende'); continue
+        if len(idx) < min_total or len(set(lab[i] for i in idx)) < 2: rep.append(f'- {nom}: pocas pistas con dato, no se aprende'); continue
         Xs, ys = X[idx], np.array([lab[i] for i in idx]); ws_ = np.array([wl[i] for i in idx]); cls = sorted(set(ys)); Ps = cv_predict(Xs, ys, [t[i] for i in idx], cls, w=ws_)
         acc = float((np.array(cls)[Ps.argmax(1)] == ys).mean()); b0 = Counter(ys).most_common(1)[0][1] / len(ys); ok = acc >= b0 + 0.05
         Softmax(cls).fit(Xs, ys, w=ws_).dump(nm, store); store[f'{nm}__off'] = np.array([0 if ok else 1])
@@ -226,10 +199,10 @@ def train_genre(xml_path, limit=2500, min_n=25):
     open(os.path.join(DATA, 'informe_genre.md'), 'w', encoding='utf-8').write('\n'.join(rep) + '\n'); print('\n' + '\n'.join(rep))
 
 def learn_from_xml(xml_path):
-    """Todo lo que se aprende de tu rekordbox.xml: START MIX, color del cue C y género. Devuelve el informe junto."""
+    """Reentrena a la vez START MIX, color del cue C y género/categoría/estrellas, solo con lo que tú has aplicado (no usa el XML). Devuelve el informe junto."""
     out = []
     for fn, rf in ((cmd_train_marks, 'informe_marks.md'), (train_genre, 'informe_genre.md')):
-        try: fn(xml_path)
+        try: fn()
         except BaseException as e: print('  (se salta:', e, ')')
         for r in (rf, 'informe_cvox.md') if rf == 'informe_marks.md' else (rf,):
             p = os.path.join(DATA, r)
@@ -322,21 +295,22 @@ def auto_learn(xml_path='', folders=(), n=10):
         try: train_cvox(xml_path)
         except BaseException as e: print('No se pudo reentrenar el color del C:', e)
     nmeta = _newer(LEARN_META_DIR, GENRE_MODEL)
-    if os.path.exists(GENRE_MODEL) and nmeta >= max(3, n // 3) and xml_path and os.path.exists(xml_path):
-        print(f'{nmeta} correcciones de género/categoría/estrellas. Reentrenando…')
-        try: train_genre(xml_path)
-        except BaseException as e: print('No se pudo reentrenar género/categoría/estrellas:', e)
-    elif os.path.exists(GENRE_MODEL): print(f'Género/categoría/estrellas: {nmeta}/{max(3, n // 3)} correcciones nuevas.')
+    tot_meta = len([x for x in os.listdir(LEARN_META_DIR) if x.endswith('.npz')]) if os.path.isdir(LEARN_META_DIR) else 0
+    if (os.path.exists(GENRE_MODEL) and nmeta >= max(3, n // 3)) or (not os.path.exists(GENRE_MODEL) and tot_meta >= 40):
+        print(f'{nmeta} ejemplos nuevos de género/categoría/estrellas ({tot_meta} en total). Entrenando con lo tuyo…')
+        try: train_genre()
+        except BaseException as e: print('No se pudo entrenar género/categoría/estrellas:', e)
+    else: print(f'Género/categoría/estrellas: {nmeta}/{max(3, n // 3)} ejemplos nuevos' + ('' if os.path.exists(GENRE_MODEL) else f' · {tot_meta}/40 para crear el modelo') + '.')
     nm = _newer(LEARN_MARKS_DIR, MARKS_MODEL); tot = len([x for x in os.listdir(LEARN_MARKS_DIR) if x.endswith('.npz')]) if os.path.isdir(LEARN_MARKS_DIR) else 0
-    have = os.path.exists(MARKS_MODEL); xml_ok = bool(xml_path) and os.path.exists(xml_path)
+    have = os.path.exists(MARKS_MODEL)
     if have and nm >= n:
         print(f'{nm} marcas nuevas. Reentrenando START MIX…'); shutil.copy2(MARKS_MODEL, MARKS_MODEL + '.prev')
-        try: cmd_train_marks(xml_path if xml_ok else None)
+        try: cmd_train_marks()
         except BaseException as e:
             print('Reentrenamiento de START MIX fallido, se mantiene el anterior:', e); shutil.copy2(MARKS_MODEL + '.prev', MARKS_MODEL)
     elif not have and tot >= 40:
-        print(f'Aún no había modelo de START MIX y ya tienes {tot} marcas tuyas. Entrenando con ellas (sin usar el XML)…')
-        try: cmd_train_marks(None)
+        print(f'Aún no había modelo de START MIX y ya tienes {tot} marcas tuyas. Entrenando con ellas…')
+        try: cmd_train_marks()
         except BaseException as e: print('No se pudo entrenar START MIX todavía:', e)
     else: print(f'Marcas START MIX: {nm}/{n} nuevas' + ('' if have else f' · {tot}/40 para crear el modelo con tus marcas') + '.')
 

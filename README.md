@@ -25,7 +25,7 @@ Rename · tag · beat-grid · cue-point → **Rekordbox-ready XML**
 | :--- | :--- |
 | **Problem** | Prepping one track meant 4 tools (Mixed In Key, Platinum Notes, Rekordbox, Metadatics) and minutes of repetitive clicking. |
 | **Solution** | One local web app that proposes everything, lets you fix it on the waveform, then writes the renamed files and a Rekordbox XML. |
-| **Twist** | It learns from *your* corrections: what you fix counts 3×, what you only accept 0.5×. |
+| **Twist** | It learns only from tracks *you* apply, never from the Rekordbox collection: what you fix counts 3×, what you only accept 0.5×. |
 | **Engineering** | Layered engine, hardened local server, 59 tests, CI with lint and type checks. No ML framework, only NumPy. |
 
 ## 🎯 What it does

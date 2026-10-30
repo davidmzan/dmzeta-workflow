@@ -2,7 +2,6 @@
 import os, shutil, unittest
 import numpy as np
 from _common import dj, TMP, make_track, have_ffmpeg
-import djcore.training as training
 
 
 class WeightTest(unittest.TestCase):
@@ -50,22 +49,33 @@ class RegistryTest(unittest.TestCase):
         e = log[-1]; self.assertEqual(e['model'], 'cvox'); self.assertEqual(e['n'], 30); self.assertEqual(e['n_user'], 10)
         for k in ('when', 'accuracy', 'baseline', 'enabled'): self.assertIn(k, e)
 
-    def test_genre_training_uses_user_examples_and_logs(self):
-        rs = np.random.RandomState(0); gen = ['Reggaeton', 'House', 'Trap']; cats = ['00FF00', 'FFA500', 'FFFF00', '660099']; rows = []
-        for i in range(400):
-            rows.append(f'<TRACK TrackID="{i}" Genre="{gen[i % 3]}" AverageBpm="{90 + 10 * (i % 3)}" Colour="0x{cats[(i % 3 + i % 2) % 4]}" Rating="{51 * (1 + i % 5)}" Location="file://localhost{TMP}/x.mp3"></TRACK>')
-        open(os.path.join(TMP, 'g.xml'), 'w').write('<DJ_PLAYLISTS><COLLECTION>' + ''.join(rows) + '</COLLECTION></DJ_PLAYLISTS>')
-        open(os.path.join(TMP, 'x.mp3'), 'wb').write(b'x')
-        orig = training.struct_matrix; training.struct_matrix = lambda p, b, t0, nbars=100: (rs.rand(100, dj.NF).astype('f') + (b - 100) / 50, None)
-        shutil.rmtree(dj.LEARN_META_DIR, ignore_errors=True); os.makedirs(dj.LEARN_META_DIR)
-        for j in range(5): np.savez_compressed(os.path.join(dj.LEARN_META_DIR, f'{j}.npz'), x=np.zeros(59, dtype='f'), genre='Afro', cat='Samples', stars='5', gw=dj.W_CORRECTED, cw=dj.W_CORRECTED, sw=0.0)
-        try:
-            dj.train_genre(os.path.join(TMP, 'g.xml'), min_n=5)
-        finally: training.struct_matrix = orig
+    def _meta(self, n, genres=('Reggaeton', 'House', 'Trap'), sw=0.0):
+        shutil.rmtree(dj.LEARN_META_DIR, ignore_errors=True); os.makedirs(dj.LEARN_META_DIR); rs = np.random.RandomState(1)
+        for j in range(n):
+            g = genres[j % len(genres)]; x = rs.rand(59).astype('f') * .2; x[(j % len(genres)) * 5] += 1.0           # el género deja una huella clara en las características
+            np.savez_compressed(os.path.join(dj.LEARN_META_DIR, f'{j}.npz'), x=x, genre=g, cat='Peak Time' if j % 2 else 'Warm Up', stars='5', gw=dj.W_CORRECTED, cw=dj.W_CORRECTED, sw=sw)
+
+    def test_genre_training_uses_only_user_examples(self):
+        """Aprende solo de tus ejemplos: no lee el XML (ni siquiera existe), registra el resultado y no usa estrellas sin revisar."""
+        if os.path.exists(dj.GENRE_MODEL): os.remove(dj.GENRE_MODEL)
+        self._meta(60); dj.train_genre(os.path.join(TMP, 'no_existe.xml'))
         log = {e['model']: e for e in dj.load_model_log()[-4:]}
-        self.assertEqual(log['genre']['n_user'], 5); self.assertEqual(log['genre']['n'], 405)
-        self.assertIn('Afro', list(np.load(dj.GENRE_MODEL)['genre__cl']))                      # la clase que solo viene de tus correcciones existe
-        self.assertNotIn('star', log) if 'star' not in log else self.assertEqual(log['star']['n_user'], 0)   # sw=0: tus estrellas sin revisar no entran
+        self.assertEqual((log['genre']['n'], log['genre']['n_user']), (60, 60)); self.assertTrue(log['genre']['enabled'])
+        self.assertEqual(sorted(np.load(dj.GENRE_MODEL)['genre__cl']), ['House', 'Reggaeton', 'Trap'])
+        self.assertNotIn('star', log)                                                              # sw=0: tus estrellas sin revisar no entran
+
+    def test_genre_needs_enough_own_examples(self):
+        if os.path.exists(dj.GENRE_MODEL): os.remove(dj.GENRE_MODEL)
+        self._meta(30); dj.train_genre(); self.assertFalse(os.path.exists(dj.GENRE_MODEL))          # menos de 40 pistas tuyas: no se entrena
+        self._meta(60, genres=('Solo',)); dj.train_genre(); self.assertFalse(os.path.exists(dj.GENRE_MODEL))   # un único género: tampoco
+
+    def test_start_mix_trains_from_own_marks_only(self):
+        os.makedirs(dj.LEARN_MARKS_DIR, exist_ok=True); [os.remove(os.path.join(dj.LEARN_MARKS_DIR, f)) for f in os.listdir(dj.LEARN_MARKS_DIR)]
+        rs = np.random.RandomState(2)
+        for i in range(45): np.savez_compressed(os.path.join(dj.LEARN_MARKS_DIR, f'{i}.npz'), A=rs.rand(120, dj.NF).astype('f'), target=24 + 4 * (i % 8), weight=dj.W_CORRECTED, N=8)
+        if os.path.exists(dj.MARKS_MODEL): os.remove(dj.MARKS_MODEL)
+        dj.cmd_train_marks(os.path.join(TMP, 'no_existe.xml')); self.assertTrue(os.path.exists(dj.MARKS_MODEL))
+        e = [x for x in dj.load_model_log() if x['model'] == 'start_mix'][-1]; self.assertEqual((e['n'], e['n_user']), (45, 45))     # ni una pista del XML
 
 
 if __name__ == '__main__': unittest.main(verbosity=2)

@@ -171,7 +171,7 @@ class App(tk.Tk):
         c4 = Step(left, 4, 'Generar cues para Rekordbox', 'Aprende de tu rekordbox.xml dónde pones INTRO y los hot cues A, B y C, y crea djflow_cues.xml en la carpeta nueva. Lo importas en Rekordbox (visor de rekordbox xml) y las pistas entran con cues y beat grid. START MIX, END MIX y el loop los propone el modelo si lo has entrenado (botón de abajo), y los ajustas sobre la onda. Con el XML también detecta duplicados al analizar.')
         c4.pack(fill='x'); s.lbl_xml = tk.Label(c4.body, bg=CARD, fg=MUTED, font=('Helvetica Neue', 11), anchor='w', justify='left', wraplength=300); s.lbl_xml.pack(fill='x', pady=(0, 6))
         r = tk.Frame(c4.body, bg=CARD); r.pack(fill='x'); Btn(r, 'Elegir rekordbox.xml', s.pick_xml, False).pack(side='left'); Btn(r, 'Generar cues', s.cues).pack(side='left', padx=8)
-        Btn(c4.body, 'Aprender START MIX de mi colección', s.train_marks, False).pack(anchor='w', pady=(6, 0))
+        Btn(c4.body, 'Reentrenar con mis pistas', s.train_marks, False).pack(anchor='w', pady=(6, 0))
 
         # derecha: tabla + registro
         th = tk.Frame(right, bg=BG); th.pack(fill='x', pady=(0, 6))
