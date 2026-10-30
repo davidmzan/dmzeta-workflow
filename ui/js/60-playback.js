@@ -106,7 +106,14 @@ function bindDeck(){
   window.addEventListener('mouseup',e=>{if(drag&&drag.moved&&drag.gm&&D.buf){const r=curRow();if(r){curMarks().t0=+D.t0.toFixed(4);r.reviewed=true;patchCard(S.sel);queueSave();if(D.playing)startPlay(curPos());}}if(drag&&!drag.moved&&D.buf&&e.target===wf){const r=wf.getBoundingClientRect(),t=D.view[0]+(e.clientX-r.left)/r.width*(D.view[1]-D.view[0]);seek(snap(t));}drag=null;});
   wf.parentElement.addEventListener('wheel',e=>{if(!D.buf)return;e.preventDefault();const r=wf.getBoundingClientRect(),a=D.view[0]+(e.clientX-r.left)/r.width*(D.view[1]-D.view[0]);
     if(Math.abs(e.deltaX)>Math.abs(e.deltaY)*2.5){const sp=D.view[1]-D.view[0];setView(D.view[0]+e.deltaX/r.width*sp,D.view[0]+e.deltaX/r.width*sp+sp);}else zoom(Math.exp(e.deltaY*(e.ctrlKey?.012:.0045)),a);},{passive:false});
+  // La app nunca hace zoom: se bloquea el zoom del navegador (pinch, Ctrl/⌘+rueda, Ctrl/⌘ +/−/0 y gestos de Safari). Solo hacen zoom la onda y la mini onda.
+  window.addEventListener('wheel',e=>{if(e.ctrlKey||e.metaKey)e.preventDefault();},{passive:false});
+  ['gesturestart','gesturechange','gestureend'].forEach(g=>document.addEventListener(g,e=>e.preventDefault()));
+  window.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&['+','=','-','_','0'].includes(e.key))e.preventDefault();});
   const ov=$('#ov'),ovGo=e=>{if(!D.buf)return;const r=ov.getBoundingClientRect(),t=(e.clientX-r.left)/r.width*D.dur,sp=D.view[1]-D.view[0];setView(t-sp/2,t+sp/2);};let od=false;
+  ov.addEventListener('wheel',e=>{if(!D.buf)return;e.preventDefault();const r=ov.getBoundingClientRect(),t=Math.max(0,Math.min(D.dur,(e.clientX-r.left)/r.width*D.dur)),sp=D.view[1]-D.view[0];
+    if(Math.abs(e.deltaX)>Math.abs(e.deltaY)*2.5){const c=(D.view[0]+D.view[1])/2+e.deltaX/r.width*D.dur;setView(c-sp/2,c+sp/2);}
+    else{const ns=Math.min(D.dur,Math.max(0.8,sp*Math.exp(e.deltaY*(e.ctrlKey?.012:.0045))));setView(t-ns/2,t+ns/2);}},{passive:false});   // rueda sobre la mini onda: zoom de la onda grande centrado donde apuntas
   ov.addEventListener('mousedown',e=>{od=true;ovGo(e);seek((e.clientX-ov.getBoundingClientRect().left)/ov.clientWidth*D.dur);});window.addEventListener('mousemove',e=>{if(od)ovGo(e);});window.addEventListener('mouseup',()=>od=false);
   $('#tPlay').onclick=togglePlay;$('#tStart').onclick=()=>seek(D.t0);$('#tCut').onclick=()=>{const r=curRow();if(r&&r.p.bars&&D.bpm){const t=D.t0+r.p.bars*barLen();seek(t-4*barLen());const sp=D.view[1]-D.view[0];setView(t-sp*.35,t+sp*.65);}};
   $('#lLen').onchange=e=>{D.loopLen=+e.target.value;const r=curRow(),m=curMarks();if(r&&m.loop){m.loop[1]=D.loopLen;delete m.loopAuto;r.reviewed=true;patchCard(S.sel);queueSave();}drawDeck();};$('#tMk').onclick=setCuePt;$('#tQ').onclick=()=>{D.q=!D.q;drawDeck();};$('#tClk').onclick=()=>{D.clicks=!D.clicks;if(D.playing)startPlay(curPos());drawDeck();};

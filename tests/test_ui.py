@@ -34,6 +34,12 @@ class StructureTest(unittest.TestCase):
         css = open(os.path.join(UI, 'css', '05-overlays.css'), encoding='utf-8').read()
         self.assertRegex(css, r'\.drawer h3\{[^}]*position:sticky')
 
+    def test_page_zoom_blocked_and_only_waveforms_zoom(self):
+        pb = open(os.path.join(UI, 'js', '60-playback.js'), encoding='utf-8').read()
+        for k in ("window.addEventListener('wheel'", "e.ctrlKey||e.metaKey)e.preventDefault()", 'gesturestart', "['+','=','-','_','0']", "ov.addEventListener('wheel'", "wf.parentElement.addEventListener('wheel'"): self.assertIn(k, pb)
+        self.assertIn('user-scalable=no', INDEX)
+        self.assertIn('touch-action:pan-x pan-y', open(os.path.join(UI, 'css', '00-base.css'), encoding='utf-8').read())
+
     def test_no_inline_script_left_in_index(self):
         self.assertIsNone(re.search(r'<script>(?!\s*</script>)', INDEX)); self.assertNotIn('<style>', INDEX)
 
