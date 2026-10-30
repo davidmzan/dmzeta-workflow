@@ -12,7 +12,7 @@ Rename · tag · beat-grid · cue-point → **Rekordbox-ready XML**
 ![Python](https://img.shields.io/badge/python-3.10%20%7C%203.12-3776AB?logo=python&logoColor=white)
 ![NumPy](https://img.shields.io/badge/NumPy-hand--rolled%20models-013243?logo=numpy&logoColor=white)
 ![Lint](https://img.shields.io/badge/lint-ruff%20%2B%20mypy-261230)
-![Tests](https://img.shields.io/badge/tests-59%20passing-2ea44f)
+![Tests](https://img.shields.io/badge/tests-66%20passing-2ea44f)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 </div>

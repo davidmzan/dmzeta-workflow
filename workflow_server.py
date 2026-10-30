@@ -108,11 +108,16 @@ def read_review(folder):
     return out
 
 def write_review(folder, rows, marks):
-    with open(os.path.join(folder, 'review.csv'), 'w', newline='', encoding='utf-8-sig') as fh:
-        w = csv.writer(fh); w.writerow(['original', 'proposed', 'confidence', 'flags', 'final', 'artist', 'reviewed', 'edit_final', 'checked'])
+    path = os.path.join(folder, 'review.csv'); orig = {}
+    if os.path.exists(path):                                # conserva la propuesta ORIGINAL de la app para poder medir cuánto la corriges
+        try:
+            for o in csv.DictReader(open(path, newline='', encoding='utf-8-sig')): orig[o['original']] = o.get('orig_proposed') or o.get('proposed') or ''
+        except Exception: orig = {}
+    with open(path, 'w', newline='', encoding='utf-8-sig') as fh:
+        w = csv.writer(fh); w.writerow(['original', 'proposed', 'confidence', 'flags', 'final', 'artist', 'reviewed', 'edit_final', 'checked', 'orig_proposed'])
         for r in rows:
             fin = r['final'] if r.get('checked') else ''
-            w.writerow([r['original'], r['final'], r['confidence'], r['flags'], fin, r['artist'], '1' if r.get('reviewed') else '0', r['final'], '1' if r.get('checked') else '0'])
+            w.writerow([r['original'], r['final'], r['confidence'], r['flags'], fin, r['artist'], '1' if r.get('reviewed') else '0', r['final'], '1' if r.get('checked') else '0', orig.get(r['original']) or r['final']])
     dj.save_marks(folder, marks or {})
 
 def pick(kind):
@@ -199,7 +204,7 @@ class H(BaseHTTPRequestHandler):
             if u.path == '/api/quality':
                 log = dj.load_model_log(); latest = {}
                 for e in log: latest[e['model']] = e
-                return s.send_json(dict(latest=list(latest.values()), history=log[-60:], bpm_fixes=dj.bpm_fix_summary()))
+                return s.send_json(dict(latest=list(latest.values()), history=log[-60:], bpm_fixes=dj.bpm_fix_summary(), usage=dj.usage_summary()))
             if u.path == '/api/job':
                 j = JOBS.get(q.get('id')); return s.send_json(dict(j, log=j['log'][-60:]) if j else dict(status='missing'))
             if u.path == '/api/track':

@@ -44,10 +44,11 @@ function cardHTML(r,i){
 }
 function visible(){
   const q=S.q.trim().toLowerCase();
-  return S.rows.map((r,i)=>[r,i]).filter(([r])=>{
+  const v=S.rows.map((r,i)=>[r,i]).filter(([r])=>{
     if(q&&!(r.original+' '+r.artist+' '+r.final).toLowerCase().includes(q))return false;
     return S.filter==='all'||(S.filter==='doubt'&&isDoubt(r)&&!r.reviewed)||(S.filter==='dup'&&r.dup)||(S.filter==='seen'&&r.reviewed)||(S.filter==='off'&&!r.checked);
   });
+  return S.sortConf?v.sort((a,b)=>(isDoubt(b[0])-isDoubt(a[0]))||(a[0].confidence-b[0].confidence)||(a[1]-b[1])):v;   // menos seguras primero
 }
 function renderFilters(){
   const n=S.rows.length,c={all:n,doubt:S.rows.filter(r=>isDoubt(r)&&!r.reviewed).length,dup:S.rows.filter(r=>r.dup).length,seen:S.rows.filter(r=>r.reviewed).length,off:S.rows.filter(r=>!r.checked).length};
@@ -55,9 +56,10 @@ function renderFilters(){
   $('#filters').innerHTML=Object.keys(L).map(k=>`<button class="pill ${S.filter===k?'on':''}" data-f="${k}">${L[k]}<b>${c[k]}</b></button>`).join('')+`<input class="search" id="q" placeholder="Buscar…" value="${esc(S.q)}">`;
   const q=$('#q');q.oninput=()=>{S.q=q.value;renderList();};
   const nv=visible().length;
-  $('#bulk').innerHTML=`<button class="pill" data-bulk="on" title="Marca con ✓ todas las pistas que ves ahora (usa el filtro Off o Duplicadas)">☑ Marcar visibles<b>${nv}</b></button><button class="pill" data-bulk="off">☐ Desmarcar visibles</button><button class="pill" data-bulk="nodup" title="Marca todas menos las duplicadas">☑ Todas menos duplicadas</button>`;
+  $('#bulk').innerHTML=`<button class="pill" data-bulk="on" title="Marca con ✓ todas las pistas que ves ahora (usa el filtro Off o Duplicadas)">☑ Marcar visibles<b>${nv}</b></button><button class="pill" data-bulk="off">☐ Desmarcar visibles</button><button class="pill" data-bulk="nodup" title="Marca todas menos las duplicadas">☑ Todas menos duplicadas</button><button class="pill ${S.sortConf?'on':''}" data-bulk="sort" title="Ordena la lista: primero las que el modelo ve menos claras">⇅ Menos seguras primero</button>`;
 }
-function bulk(m){
+async function bulk(m){
+  if(m==='sort'){S.sortConf=!S.sortConf;renderFilters();renderList();return;}
   if(m==='nodup')S.rows.forEach(r=>{r.checked=!r.dup;});else visible().forEach(([r])=>{r.checked=(m==='on');});
   renderFilters();renderList();queueSave();
 }

@@ -46,7 +46,7 @@ class ReleaseFilesTest(unittest.TestCase):
     def test_no_personal_data_tracked(self):
         if not shutil.which('git') or not os.path.isdir(os.path.join(ROOT, '.git')): self.skipTest('sin repositorio')
         files = subprocess.run(['git', 'ls-files'], cwd=ROOT, capture_output=True, text=True).stdout.split()
-        bad = [f for f in files if re.search(r'\.(mp3|wav|m4a|flac|aif+|npz|prev)$|rekordbox\.xml$|config\.json$|done\.json$|prefs\.json$|djflow_marks\.json$|models_log\.json$|bpm_fixes\.json$', f)]
+        bad = [f for f in files if re.search(r'\.(mp3|wav|m4a|flac|aif+|npz|prev)$|rekordbox\.xml$|config\.json$|done\.json$|prefs\.json$|djflow_marks\.json$|models_log\.json$|bpm_fixes\.json$|usage_log\.json$', f)]
         self.assertEqual(bad, [], 'datos personales o generados dentro de git')
         for f in files:
             if f.endswith(('.py', '.html', '.md', '.command')) and not f.startswith('tests/'):

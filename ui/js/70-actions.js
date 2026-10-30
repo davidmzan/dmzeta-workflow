@@ -25,6 +25,7 @@ async function confirmApply(){
   if(!await ask('Aplicar a '+on.length+' pistas',`Se renombrarán y se limpiarán los tags (título, artista, álbum, BPM y tono)${xml?', y se generará djflow_cues.xml con los cues.':'. Sin cues: falta elegir rekordbox.xml en Ajustes.'}\n\n${S.cfg.backup?'Se guarda copia de los originales: podrás deshacer.':'Sin copia de seguridad: no podrás deshacer.'}\nNo lo hagas con pistas que ya estén en Rekordbox.`,'Aplicar'))return;
   clearTimeout(S.saveT);await saveReview();
   const rows=S.rows.map(r=>({original:r.original,final:r.final,artist:r.artist,confidence:r.confidence,flags:r.flags,checked:r.checked,reviewed:r.reviewed}));
+  trackSecs();
   const j=await api('/api/apply',{folder:S.folder,rows,marks:S.marks,backup:S.cfg.backup,cues:xml});
   await runJob('Aplicando',j.job,async()=>{S.done={apply:true,cues:xml};S.st=await api('/api/state');S.st.undo=true;loadFolderStat();S.rows=[];S.sel=-1;stopPlay();D.buf=null;updateTop(null);setMsg('');render();drawDeck();
     ask('Listo ✓',xml?'Nombres, tags y cues listos.\n\nEn Rekordbox:\n1. Preferencias › Avanzado › Base de datos › Biblioteca importada: elige djflow_cues.xml de la carpeta.\n2. Panel «rekordbox xml» › djflow: arrastra las pistas a tu colección.':'Nombres y tags aplicados.','Entendido',true);});

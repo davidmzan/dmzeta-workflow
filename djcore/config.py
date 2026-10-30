@@ -66,4 +66,5 @@ W_CORRECTED = 3.0
 W_ACCEPTED = 0.5
 LEARN_META_DIR = os.path.join(DATA, 'learned_meta')
 MODEL_LOG = os.path.join(DATA, 'models_log.json')
+USAGE_LOG = os.path.join(DATA, 'usage_log.json')            # cuánto corriges cada campo al aplicar (para saber dónde se te va el tiempo)
 BPM_FIX_LOG = os.path.join(DATA, 'bpm_fixes.json')          # correcciones de BPM hechas por ti (para medir cuántas veces falla ×2 / ×0.5)

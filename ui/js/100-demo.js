@@ -27,12 +27,12 @@ const DEMO_ROWS=[
  ['Flipa (8 Bars MOE) (Aca Out) - 10A - 100','JC Reyes',.98,'Live Mashup: regla fija (MOE, Aca Out)'],
  ['Loquita (8 Bars MOE) (Aca Out) - 7A - 120','JC Reyes',.95,'Live Mashup: regla fija (MOE, Aca Out)'],
  ['Bebe (8 Bars MOE) (Aca Out) - 11A - 85','Ozuna, Anuel Aa',.81,'Live Mashup: regla fija (MOE, Aca Out)'],
-].map(([f,a,c,fl],i)=>({original:f.replace(/ - \d+A? - /,' - ').replace(/\s*\(.*?\)/g,'')+' [orig '+(i+1)+'].mp3',proposed:f,final:f,artist:a,confidence:c,flags:fl,dup:fl.startsWith('DUPLICADO'),checked:!fl.startsWith('DUPLICADO'),reviewed:i===4||i===15,parsed:parseName(f+'.mp3'),marks:i===2?{start:40,end:48,auto:true,conf:.62,loop:[104,8]}:null}));
+].map(([f,a,c,fl],i)=>({original:f.replace(/ - \d+A? - /,' - ').replace(/\s*\(.*?\)/g,'')+' [orig '+(i+1)+'].mp3',proposed:f,final:f,artist:a,confidence:c,flags:fl,dup:fl.startsWith('DUPLICADO'),checked:!fl.startsWith('DUPLICADO'),reviewed:i===4||i===15,parsed:parseName(f+'.mp3'),marks:i===2?{start:40,end:48,auto:true,conf:.62,alts:[40,56,28],loop:[104,8]}:null}));
 let demoJob=0;
 async function demoApi(path,body){
   await new Promise(r=>setTimeout(r,40));
   if(path.startsWith('/api/bpmfix'))return{ok:true};
-  if(path.startsWith('/api/quality'))return{bpm_fixes:{total:5,double_half:3,last:[]},latest:[{model:'names',when:'demo',n:48,n_user:12,accuracy:.85,baseline:null,enabled:true},{model:'cvox',when:'demo',n:27,n_user:9,accuracy:.78,baseline:.67,enabled:true},{model:'start_mix',when:'demo',n:1234,n_user:34,accuracy:.21,baseline:.17,enabled:false}],history:[]};
+  if(path.startsWith('/api/quality'))return{bpm_fixes:{total:5,double_half:3,last:[]},usage:{tracks:40,median_secs:74,fields:{name:{n:40,corrected:6,rate:.15},grid:{n:40,corrected:3,rate:.075},start_mix:{n:38,corrected:24,rate:.63},genre:{n:35,corrected:10,rate:.29}}},latest:[{model:'names',when:'demo',n:48,n_user:12,accuracy:.85,baseline:null,enabled:true},{model:'cvox',when:'demo',n:27,n_user:9,accuracy:.78,baseline:.67,enabled:true},{model:'start_mix',when:'demo',n:1234,n_user:34,accuracy:.21,baseline:.17,enabled:false}],history:[]};
   if(path.startsWith('/api/state'))return{cfg:{train:['/Users/demo/Music/Library/Latin/2026/Brunch','/Users/demo/Music/Library/Latin/2025/Dembow'],xml:'/Users/demo/djflow/rekordbox.xml',folder:'/Users/demo/Music/New',backup:true},model:true,marks_model:true,undo:true,learned:48};
   if(path.startsWith('/api/review')&&body===undefined)return{rows:DEMO_ROWS};
   if(path.startsWith('/api/track')){const n=decodeURIComponent((path.match(/name=([^&]*)/)||[])[1]||'');const r=DEMO_ROWS.find(x=>x.original===n);return{t0:.05+(DEMO_ROWS.indexOf(r)%3)*.01,bpm:r?r.parsed.bpm:100,score:2};}

@@ -2,7 +2,7 @@
 import os, shutil, hashlib
 import numpy as np
 from .config import CANDS, CVOX_MODEL, DATA, EXT, GENRE_MODEL, LEARN_CVOX_DIR, LEARN_DIR, LEARN_MARKS_DIR, LEARN_META_DIR, LIME_C, MARKS_MODEL, MODEL_PATH, PREFS_FILE, RED_C, START_KS_MAX, W_CORRECTED
-from .storage import _pref, atomic_savez, atomic_write_json, learn_weight, load_marks, load_prefs, log_model
+from .storage import _pref, atomic_savez, atomic_write_json, learn_weight, load_marks, load_prefs, log_model, log_usage
 from .names import parse_name
 from .audio import get_features, struct_matrix, track_bpm_key
 from .grid import detect_grid, grid_bias
@@ -208,6 +208,24 @@ def learn_from_xml(xml_path):
             p = os.path.join(DATA, r)
             if os.path.exists(p): out.append(open(p, encoding='utf-8').read())
     return '\n'.join(out)
+
+def record_usage(folder, rows):
+    """Anota qué corregiste en cada pista aplicada. `rows` = [(nombre_final, fila_del_review)]. Solo cuenta lo que la app había propuesto."""
+    marks = load_marks(folder); out = []
+    for name, r in rows:
+        mk = marks.get(name) or {}; e = dict(file=name)
+        prop = (r.get('orig_proposed') or r.get('proposed') or '').strip()      # propuesta original de la app (no la que guardó la interfaz)
+        if prop: e['name'] = int((r.get('final') or '').strip() != prop)
+        if mk.get('start') is not None: e['start_mix'] = 0 if (mk.get('auto') and mk.get('ok')) else 1
+        e['grid'] = int(mk.get('t0') is not None)                        # 1 = ajustaste el grid a mano
+        if mk.get('ccol') is not None: e['cue_color'] = 1
+        if mk.get('genre'): e['genre'] = int(bool(mk.get('genre_edit')))
+        if mk.get('cat'): e['category'] = int(bool(mk.get('cat_edit')))
+        if mk.get('stars'): e['stars'] = 0 if mk.get('stars_auto') else 1
+        if mk.get('loop'): e['loop'] = 0 if mk.get('loopAuto') else 1
+        if mk.get('secs'): e['secs'] = round(float(mk['secs']), 1)
+        out.append(e)
+    log_usage(out)
 
 def remember_marks(folder, applied):
     """Aprende de tus marcas manuales (START/END MIX, loop): guarda la estructura de la pista y tus preferencias de hueco y duración."""

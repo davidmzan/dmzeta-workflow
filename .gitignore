@@ -35,3 +35,4 @@ build/
 bpm_fixes.json
 models_log.json
 tests/*.new
+usage_log.json

@@ -27,6 +27,13 @@ function colPeak(spp,a){ // devuelve [min,max] para un rango de muestras
 const PAL=[['Rojo',[230,40,40]],['Naranja',[224,100,27]],['Amarillo',[180,190,4]],['Lima',[165,225,22]],['Verde',[40,226,20]],['Verde azulado',[16,177,118]],['Cian',[0,224,255]],['Azul claro',[80,180,255]],['Azul',[48,90,255]],['Morado',[180,50,255]],['Rosa',[255,18,123]],['Fucsia',[222,68,207]]];
 const rgbHex=c=>'#'+c.map(v=>v.toString(16).padStart(2,'0')).join('');
 const extSlot=()=>{const r=curRow();return r&&r.p&&r.p.bars===4?'B':'C';};      // cue donde acaba el extender y que lleva el color rojo/lima (B con 4 compases)
+function altStarts(mk){return(Array.isArray(mk.alts)&&mk.auto&&!mk.ok&&mk.start!=null)?mk.alts:[];}      // candidatos pendientes de elegir
+function startHintHTML(){const mk=curMarks(),al=altStarts(mk);if(!al.length)return'';
+  return `<div><div class="lbl">START MIX · candidatos del modelo (teclas 1 · 2 · 3)</div><div class="tg" id="tAlt">${al.map((b,i)=>`<button class="tgb ${b===mk.start?'on':''}" data-alt="${i}">${i+1} · compás ${b}</button>`).join('')}</div></div>`;}
+function pickStart(i){const r=curRow();if(!r)return;const mk=curMarks(),al=altStarts(mk);if(i<0||i>=al.length)return;
+  if(al[i]===mk.start){mk.ok=true;}      // das por buena la propuesta principal
+  else{const gap=(mk.end!=null&&mk.start!=null)?mk.end-mk.start:((S.rules&&S.rules.gap)||8);mk.start=al[i];mk.end=al[i]+gap;delete mk.noEnd;delete mk.auto;mk.alt_pick=i+1;delete mk.alts;}   // otro candidato: cuenta como corrección tuya
+  r.reviewed=true;patchCard(S.sel);queueSave();renderInsp();drawDeck();}
 function cColor(){const mk=curMarks();if(Array.isArray(mk.ccol))return rgbHex(mk.ccol);return D.ccol==='red'?'#e62828':'#a5e116';}
 function renderPal(){const mk=curMarks(),cur=Array.isArray(mk.ccol)?mk.ccol.join(','):'';
   $('#pal').innerHTML=`<button class="sw ${cur?'':'on'}" data-auto="1" style="background:#2a2a3a" title="Automático (el detectado)">A</button>`+PAL.map(([n,c])=>`<button class="sw ${cur===c.join(',')?'on':''}" data-c="${c.join(',')}" title="${n}" style="background:${rgbHex(c)}"></button>`).join('');}
@@ -110,6 +117,8 @@ function drawWF(){
     c.strokeStyle=q.c;c.globalAlpha=.85;c.lineWidth=2;c.beginPath();c.moveTo(x,0);c.lineTo(x,H);c.stroke();c.globalAlpha=1;
     c.fillStyle=q.c;c.beginPath();c.roundRect?c.roundRect(x,0,q.lab?16+q.lab.length*6.2:16,15,[0,4,4,0]):c.rect(x,0,16,15);c.fill();
     c.fillStyle='#06060b';c.font='800 10px -apple-system,sans-serif';c.fillText(q.k+(q.lab?' '+q.lab:''),x+4,11);}
+  // candidatos de START MIX (top-3 del modelo): teclas 1 · 2 · 3
+  altStarts(curMarks()).forEach((b,i)=>{const x=X(D.t0+b*bar);if(x<-2||x>W+2)return;c.strokeStyle='rgba(251,146,60,.8)';c.lineWidth=2;c.setLineDash([3,4]);c.beginPath();c.moveTo(x,16);c.lineTo(x,H);c.stroke();c.setLineDash([]);c.fillStyle='#fb923c';c.font='800 11px -apple-system,sans-serif';c.fillText(String(i+1),x+4,28);});
   // playhead
   if(px>=-2&&px<=W+2){c.shadowColor='#fff';c.shadowBlur=12;c.strokeStyle='#fff';c.lineWidth=2;c.beginPath();c.moveTo(px,0);c.lineTo(px,H);c.stroke();c.shadowBlur=0;c.fillStyle='#fff';c.beginPath();c.moveTo(px-6,0);c.lineTo(px+6,0);c.lineTo(px,8);c.fill();}
 }

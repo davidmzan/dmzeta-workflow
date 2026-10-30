@@ -1,7 +1,7 @@
 """Lectura y escritura de estado en disco (atómica): marcas, preferencias, registro de pistas ya procesadas."""
 import os, json, time
 import numpy as np
-from .config import BPM_FIX_LOG, DONE_FILE, EXT, MARKS_FILE, MODEL_LOG, PREFS_FILE
+from .config import BPM_FIX_LOG, DONE_FILE, EXT, MARKS_FILE, MODEL_LOG, PREFS_FILE, USAGE_LOG
 
 def atomic_write_bytes(path, data):
     """Escribe en un archivo temporal y lo renombra: si algo falla a medias, el archivo anterior queda intacto."""
@@ -98,3 +98,24 @@ def log_bpm_fix(name, detected, corrected):
 def bpm_fix_summary():
     fx = load_bpm_fixes()
     return dict(total=len(fx), double_half=sum(1 for e in fx if e.get('factor')), last=fx[-10:])
+
+
+USAGE_FIELDS = ('name', 'grid', 'start_mix', 'cue_color', 'genre', 'category', 'stars', 'loop')
+
+def load_usage():
+    try: return json.load(open(USAGE_LOG, encoding='utf-8'))
+    except Exception: return []
+
+def log_usage(entries):
+    """Una entrada por pista aplicada: {field: 1 si lo corregiste, 0 si lo dejaste como lo propuso la app, ausente si no aplica} y los segundos que le dedicaste."""
+    if not entries: return
+    log = load_usage() + [dict(e, when=time.strftime('%Y-%m-%d %H:%M:%S')) for e in entries]; atomic_write_json(USAGE_LOG, log[-2000:])
+
+def usage_summary(last=200):
+    """Porcentaje de pistas en las que corriges cada campo (sobre las últimas `last`) y tiempo mediano por pista."""
+    log = load_usage()[-int(last):]; fields = {}
+    for f in USAGE_FIELDS:
+        vals = [e[f] for e in log if e.get(f) in (0, 1)]
+        if vals: fields[f] = dict(n=len(vals), corrected=int(sum(vals)), rate=round(sum(vals) / len(vals), 3))
+    secs = sorted(float(e['secs']) for e in log if e.get('secs'))
+    return dict(tracks=len(log), fields=fields, median_secs=round(secs[len(secs) // 2], 1) if secs else None)

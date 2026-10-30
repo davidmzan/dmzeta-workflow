@@ -7,7 +7,7 @@ from .audio import ffprobe_tags
 from .grid import detect_grid
 from .models import load_genre_model, load_marks_model, load_models
 from .prediction import dup_check, dup_index, predict_meta, predict_track, propose_start
-from .training import cmd_train, cmd_train_marks, remember_examples, remember_marks
+from .training import cmd_train, cmd_train_marks, record_usage, remember_examples, remember_marks
 from .cues import cmd_cues
 
 def cmd_analyze(folder, xml=None):
@@ -86,7 +86,7 @@ def _prune_backups(keep=3):
 
 def cmd_apply(folder, backup=True):
     """Renombra y limpia SOLO las filas con nombre final. Guarda copia de los originales para poder deshacer."""
-    backup = backup not in (False, '0', 'no'); stamp = time.strftime('%Y%m%d-%H%M%S'); entries = []; artists = {}; reviewed = set(); applied = set(); mapping = {}
+    backup = backup not in (False, '0', 'no'); stamp = time.strftime('%Y%m%d-%H%M%S'); entries = []; artists = {}; reviewed = set(); applied = set(); mapping = {}; usage_rows = []
     bdir = os.path.join(BACKUP_DIR, stamp)
     with open(os.path.join(folder, 'review.csv'), newline='', encoding='utf-8-sig') as fh:
         for r in csv.DictReader(fh):
@@ -105,7 +105,7 @@ def cmd_apply(folder, backup=True):
             if backup:
                 os.makedirs(bdir, exist_ok=True); bk = os.path.join(bdir, r['original']); shutil.copy2(src, bk)
             if src != dst: os.rename(src, dst)
-            entries.append(dict(src=src, dst=dst, backup=bk)); applied.add(os.path.basename(dst)); mapping[r['original']] = os.path.basename(dst)
+            entries.append(dict(src=src, dst=dst, backup=bk)); applied.add(os.path.basename(dst)); mapping[r['original']] = os.path.basename(dst); usage_rows.append((os.path.basename(dst), r))
             if (r.get('artist') or '').strip(): artists[os.path.basename(dst)] = r['artist'].strip()
             if (r.get('reviewed') or '') == '1' or final != (r.get('proposed') or '').strip(): reviewed.add(os.path.basename(dst))
     global LAST_APPLIED; LAST_APPLIED = set(applied)
@@ -116,6 +116,8 @@ def cmd_apply(folder, backup=True):
     made = remember_examples(folder, reviewed, only=applied)
     try: remember_marks(folder, applied)
     except Exception as e: print('No se pudieron guardar las marcas:', e)
+    try: record_usage(folder, usage_rows)
+    except Exception as e: print('No se pudo anotar el uso:', e)
     os.makedirs(HIST_DIR, exist_ok=True)
     json.dump(dict(stamp=stamp, folder=folder, entries=entries, learned=made, backup=backup), open(os.path.join(HIST_DIR, stamp + '.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
     _prune_backups(); print('Ya puedes importar a Rekordbox.' + (' Si te equivocas: botón Deshacer (hasta 3 tandas).' if backup else ''))
