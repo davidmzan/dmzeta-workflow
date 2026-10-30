@@ -3,7 +3,7 @@ import os, re, subprocess
 import numpy as np
 from .config import CAT_HEX, EXT, LIME_C, RED_C
 from .storage import _pref, atomic_write_text, load_marks
-from .names import parse_name
+from .names import ext_cue_slot, parse_name
 from .audio import ffprobe_tags, track_bpm_key
 from .grid import detect_grid, mp3_delay
 from .models import load_cvox
@@ -79,11 +79,12 @@ def cmd_cues(xml_path, folder, only=None, offset_ms=0):
         vA = hot_o.get('A'); baseA = float(vA) if isinstance(vA, (int, float)) and not isinstance(vA, bool) else rules['0'][0]      # B y C siguen al A si lo mueves
         hot = {'0': rules['0'][0], '1': baseA + (rules['1'][0] - rules['0'][0]), '2': baseA + (rules['2'][0] - rules['0'][0]), '3': None, '4': st, '5': (st + X['off5']) if st is not None else None, '6': None}
         hcol = {'0': rules['0'][1], '1': rules['1'][1], '2': rules['2'][1], '3': cD, '4': C4, '5': X['col']['5'], '6': c6}
+        xs = ext_cue_slot(f); xl = 'B' if xs == '1' else 'C'         # el color rojo/lima va en el cue donde acaba el extender: B si son 4 compases, C en el resto
         cm = mk.get('ccol')
-        if isinstance(cm, (list, tuple)) and len(cm) == 3: hcol['2'] = tuple(int(v) for v in cm); print(f'    cue C: color elegido por ti {tuple(cm)}')
+        if isinstance(cm, (list, tuple)) and len(cm) == 3: hcol[xs] = tuple(int(v) for v in cm); print(f'    cue {xl}: color elegido por ti {tuple(cm)}')
         else:
             cc = cue_c_color(path, bpm, t0, f, cvm)
-            if cc: hcol['2'] = RED_C if cc == 'red' else LIME_C; print(f'    cue C: {"rojo (voz antes del final del extender)" if cc == "red" else "verde lima (sin voz en el extender)"}')
+            if cc: hcol[xs] = RED_C if cc == 'red' else LIME_C; print(f'    cue {xl}: {"rojo (voz antes del final del extender)" if cc == "red" else "verde lima (sin voz en el extender)"}')
         for L, num in zip('ABCDFG', '012356'):
             v = hot_o.get(L)
             if v is False: hot[num] = None

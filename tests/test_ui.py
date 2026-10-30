@@ -28,6 +28,12 @@ class StructureTest(unittest.TestCase):
         src = open(os.path.join(UI, 'js', '40-inspector.js'), encoding='utf-8').read()
         for k in ('id="fBpmH"', 'id="fBpmD"', "$('#fBpmH').onclick", "$('#fBpmD').onclick", 'scaleBpm(0.5)', 'scaleBpm(2)'): self.assertIn(k, src)
 
+    def test_4bar_colour_slot_and_sticky_drawer_header(self):
+        deck = open(os.path.join(UI, 'js', '50-deck.js'), encoding='utf-8').read()
+        for k in ("r.p.bars===4?'B':'C'", "xs==='B'?cColor()", "xs==='C'?cColor()", "'COLOR '+L"): self.assertIn(k, deck)
+        css = open(os.path.join(UI, 'css', '05-overlays.css'), encoding='utf-8').read()
+        self.assertRegex(css, r'\.drawer h3\{[^}]*position:sticky')
+
     def test_no_inline_script_left_in_index(self):
         self.assertIsNone(re.search(r'<script>(?!\s*</script>)', INDEX)); self.assertNotIn('<style>', INDEX)
 

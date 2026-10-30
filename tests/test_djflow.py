@@ -54,6 +54,12 @@ class CollisionTest(unittest.TestCase):
         self.assertEqual(len([g for g in got if g.endswith('.wav')]), 3)                                        # y ninguna se perdió
 
 
+class ExtenderCueTest(unittest.TestCase):
+    def test_slot_is_b_for_4_bars_else_c(self):
+        self.assertEqual(dj.ext_cue_slot('Agua (4 Bars POE) - 5A - 133.mp3'), '1')
+        for n in ('Agua (8 Bars POE) - 5A - 133.mp3', 'Agua (16 Bars MOE) - 5A - 133.mp3', 'Agua - 5A - 133.mp3', 'Sin tags.mp3'): self.assertEqual(dj.ext_cue_slot(n), '2', n)
+
+
 class DoneTest(unittest.TestCase):
     def test_done_registry(self):
         f = os.path.join(TMP, 'x.wav'); open(f, 'wb').write(b'1234')
@@ -142,6 +148,21 @@ class CuesXmlTest(unittest.TestCase):
         a = [p for p in t.findall('POSITION_MARK') if p.get('Num') == '0'][0]
         self.assertAlmostEqual(float(a.get('Start')), 0.25, places=2)          # WAV: no se compensa
         dj.cmd_cues(self.xml, self.folder)
+
+
+@unittest.skipUnless(have_ffmpeg(), 'falta ffmpeg')
+class FourBarColourTest(unittest.TestCase):
+    def test_colour_goes_to_B_with_4_bars_and_C_otherwise(self):
+        xml = os.path.join(TMP, 'rb4.xml'); tiny_xml(xml); res = {}
+        for bars in (4, 8):
+            folder = os.path.join(TMP, f'folder_{bars}b'); os.makedirs(folder, exist_ok=True); name = f'Cancion X ({bars} Bars MOE) - 8A - 120.wav'
+            make_track(os.path.join(folder, name), 120, 0.25, seconds=60)
+            json.dump({name: dict(start=24, end=32, t0=0.25, bpm=120.0, ccol=[12, 34, 56])}, open(os.path.join(folder, 'djflow_marks.json'), 'w'))
+            dj.cmd_cues(xml, folder)
+            t = ET.parse(os.path.join(folder, 'djflow_cues.xml')).getroot().find('COLLECTION').findall('TRACK')[0]
+            res[bars] = {p.get('Num'): (p.get('Red'), p.get('Green'), p.get('Blue')) for p in t.findall('POSITION_MARK') if p.get('Type') == '0' and p.get('Num') in ('1', '2')}
+        self.assertEqual(res[4]['1'], ('12', '34', '56')); self.assertNotEqual(res[4]['2'], ('12', '34', '56'))     # 4 compases: el color es del B
+        self.assertEqual(res[8]['2'], ('12', '34', '56')); self.assertNotEqual(res[8]['1'], ('12', '34', '56'))     # el resto: del C
 
 
 class ModelTest(unittest.TestCase):

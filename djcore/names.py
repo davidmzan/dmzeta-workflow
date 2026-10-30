@@ -29,6 +29,10 @@ def build_name(base, key, bpm, mashup=False, bars=None, typ=None, aca_starter=Fa
     if aca_out: p += ' (Aca Out)'
     return f'{p} - {key} - {int(round(bpm))}'
 
+def ext_cue_slot(fname):
+    """Hot cue donde acaba el extender y que lleva el color rojo/lima: '1' (B) si son 4 compases, '2' (C) en cualquier otro caso."""
+    return '1' if parse_name(fname)['bars'] == 4 else '2'
+
 _TAG_OR_TAIL = re.compile(r'\s*\((?:Mashup|Open Show|\d+ Bars (?:POE|MOE|FME)|Aca Starter|In Aca|In Hype|Short Edit|Aca Out)\)|\s*-\s*\d{1,2}[AB]\s*-\s*\d+\s*$')
 
 def with_suffix(final, n):

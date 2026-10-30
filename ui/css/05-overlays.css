@@ -16,7 +16,7 @@
 .modal .ft{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
 .drawer{position:fixed;top:0;right:0;bottom:0;width:420px;max-width:96vw;background:rgba(14,14,22,.97);border-left:1px solid var(--line);backdrop-filter:blur(24px);transform:translateX(104%);transition:.35s cubic-bezier(.2,.9,.2,1);z-index:70;padding:24px;overflow:auto;box-shadow:-30px 0 80px rgba(0,0,0,.5)}
 .drawer.show{transform:none}
-.drawer h3{font-size:20px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center}
+.drawer h3{font-size:20px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:-24px;z-index:3;margin:-24px -24px 18px;padding:24px 24px 14px;background:rgb(14,14,22);border-bottom:1px solid var(--line)}   /* cabecera fija: la ✕ no se va al hacer scroll */
 .sec{padding:15px 0;border-top:1px solid var(--line)}
 .sec h4{font-size:11px;letter-spacing:1.6px;color:var(--dim);text-transform:uppercase;margin-bottom:10px}
 .sec p{color:var(--mut);font-size:12px;line-height:1.55;margin-bottom:10px}

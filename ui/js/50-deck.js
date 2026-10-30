@@ -26,6 +26,7 @@ function colPeak(spp,a){ // devuelve [min,max] para un rango de muestras
 }
 const PAL=[['Rojo',[230,40,40]],['Naranja',[224,100,27]],['Amarillo',[180,190,4]],['Lima',[165,225,22]],['Verde',[40,226,20]],['Verde azulado',[16,177,118]],['Cian',[0,224,255]],['Azul claro',[80,180,255]],['Azul',[48,90,255]],['Morado',[180,50,255]],['Rosa',[255,18,123]],['Fucsia',[222,68,207]]];
 const rgbHex=c=>'#'+c.map(v=>v.toString(16).padStart(2,'0')).join('');
+const extSlot=()=>{const r=curRow();return r&&r.p&&r.p.bars===4?'B':'C';};      // cue donde acaba el extender y que lleva el color rojo/lima (B con 4 compases)
 function cColor(){const mk=curMarks();if(Array.isArray(mk.ccol))return rgbHex(mk.ccol);return D.ccol==='red'?'#e62828':'#a5e116';}
 function renderPal(){const mk=curMarks(),cur=Array.isArray(mk.ccol)?mk.ccol.join(','):'';
   $('#pal').innerHTML=`<button class="sw ${cur?'':'on'}" data-auto="1" style="background:#2a2a3a" title="Automático (el detectado)">A</button>`+PAL.map(([n,c])=>`<button class="sw ${cur===c.join(',')?'on':''}" data-c="${c.join(',')}" title="${n}" style="background:${rgbHex(c)}"></button>`).join('');}
@@ -35,7 +36,7 @@ function cuesList(){
   const pos=(k,def)=>hot[k]===false?null:(typeof hot[k]==='number'?hot[k]:def);
   const add=(k,c,b,lab,txt)=>o.push(b==null?{k,c}:{k,c,t:T(b),b,txt:txt!=null?txt:String(Math.round(b*4)/4),lab});
   const baseA=typeof hot.A==='number'?hot.A:R.a;      // B y C siguen al A si lo mueves
-  add('A','#28e214',pos('A',R.a),'INTRO','Intro');add('B','#28e214',pos('B',baseA+(R.b-R.a)));add('C',cColor(),pos('C',baseA+(R.c-R.a)));add('D','#7c5cff',pos('D',null));
+  add('A','#28e214',pos('A',R.a),'INTRO','Intro');const xs=extSlot();add('B',xs==='B'?cColor():'#28e214',pos('B',baseA+(R.b-R.a)));add('C',xs==='C'?cColor():'#a5e116',pos('C',baseA+(R.c-R.a)));add('D','#7c5cff',pos('D',null));
   add('E','#10b176',mk.start!=null?mk.start:null,'START MIX','START');
   add('F','#10b176',pos('F',mk.start!=null?mk.start+R.off5:null));
   add('G','#10b176',pos('G',null));
@@ -128,7 +129,7 @@ function updateReadout(){
   $('#tPlay').textContent=D.playing?'❚❚':'▶';$('#tClk').classList.toggle('on',D.clicks);$('#tQ').classList.toggle('on',D.q);$('#gDrag').classList.toggle('on',D.gm);{const m0=curMarks();if(m0.loop&&$('#lLen').value!=String(m0.loop[1])){const o=[...$('#lLen').options].find(x=>+x.value===m0.loop[1]);if(!o){const n=document.createElement('option');n.value=m0.loop[1];n.textContent=m0.loop[1]+' comp.';$('#lLen').appendChild(n);}$('#lLen').value=String(m0.loop[1]);}}$('#tMk').classList.toggle('on',D.cuePt!=null);
 }
 function renderPads(){
-  const cl=cuesList(),ml=memList();{const dq=$('#cDot');if(dq)dq.style.background=cColor();const md=$('#memDot');if(md)md.style.background=memColorOf(D.memSel||'G');}
+  const cl=cuesList(),ml=memList();{const dq=$('#cDot');if(dq)dq.style.background=cColor();const cb=$('#cColBtn');if(cb&&cb.lastChild){const L=extSlot();cb.lastChild.textContent='COLOR '+L;cb.title='Cambiar el color del hot cue '+L+' (si el detectado no es el correcto)';}const md=$('#memDot');if(md)md.style.background=memColorOf(D.memSel||'G');}
   $('#pads').innerHTML=cl.map(q=>{const on=q.t!=null&&D.buf;return `<button class="pad ${on?'on':''}" data-k="${q.k}" style="--pc:${q.c};${on?`background:${q.c}`:''}">${q.k}<small>${on?(q.txt!=null?q.txt:''):'—'}</small></button>`;}).join('');
   $('#mpads').innerHTML=ml.map(q=>{const on=q.t!=null&&D.buf;return `<button class="pad ${on?'on':''} ${q.k===(D.memSel||'G')?'sel':''}" data-k="${q.k}" title="${esc(q.txt||'')} · doble clic: editar nombre y color" style="--pc:${q.c};${on?`background:${q.c}`:''}">${on?esc(q.txt||'MEM'):'·'}</button>`;}).join('');
 }
