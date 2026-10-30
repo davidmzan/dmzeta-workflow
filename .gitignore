@@ -33,4 +33,5 @@ djcore/main_text.txt
 .ruff_cache/
 build/
 bpm_fixes.json
+models_log.json
 tests/*.new

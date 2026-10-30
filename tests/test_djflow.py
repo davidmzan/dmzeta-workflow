@@ -1,6 +1,6 @@
 """Pruebas de regresión de Dmzeta Workflow.  Ejecuta:  python3 -m unittest discover -s tests -v
 No tocan tus datos: todo (cachés, modelos, marcas) va a una carpeta temporal. Necesitan ffmpeg (el mismo que usa la app)."""
-import json, os, subprocess, unittest
+import csv, json, os, subprocess, unittest
 import xml.etree.ElementTree as ET
 import numpy as np
 from _common import dj, TMP, ROOT, make_track, have_ffmpeg, tiny_xml
@@ -24,6 +24,34 @@ class NamesTest(unittest.TestCase):
 
     def test_plain_name_has_no_tags(self):
         p = dj.parse_name('Titulo suelto.mp3'); self.assertIsNone(p['key']); self.assertIsNone(p['bars'])
+
+
+class SuffixTest(unittest.TestCase):
+    def test_with_suffix_keeps_grammar(self):
+        for fin in ('Agua (8 Bars POE) - 5A - 133', 'Hookah (Mashup)(8 Bars FME)(In Hype)(Aca Out) - 2A - 105', 'Titulo - 8A - 120', 'Sin etiquetas'):
+            out = dj.with_suffix(fin, 2); self.assertIn(' (2)', out)
+            a, b = dj.parse_name(fin + '.mp3'), dj.parse_name(out + '.mp3')
+            for k in ('key', 'bpm', 'bars', 'type', 'after', 'mashup', 'aca_out'): self.assertEqual(a[k], b[k], (fin, k))     # las etiquetas se siguen leyendo igual
+            self.assertEqual(b['base'], a['base'] + ' (2)')
+        self.assertEqual(dj.with_suffix('Agua (8 Bars POE) - 5A - 133', 3), 'Agua (3) (8 Bars POE) - 5A - 133')
+
+
+@unittest.skipUnless(have_ffmpeg(), 'falta ffmpeg')
+class CollisionTest(unittest.TestCase):
+    def test_apply_never_overwrites_or_skips(self):
+        d = os.path.join(TMP, 'collide'); os.makedirs(d, exist_ok=True)
+        names = ['uno.wav', 'dos.wav', 'tres.wav']
+        for n in names: make_track(os.path.join(d, n), 120, 0.2, seconds=6)
+        sizes = {n: os.path.getsize(os.path.join(d, n)) for n in names}
+        final = 'Cancion (8 Bars MOE) - 8A - 120'
+        with open(os.path.join(d, 'review.csv'), 'w', newline='', encoding='utf-8-sig') as fh:
+            w = csv.writer(fh); w.writerow(['original', 'proposed', 'confidence', 'flags', 'final', 'artist'])
+            for n in names: w.writerow([n, '', '', '', final, ''])
+        dj.cmd_apply(d, backup=False)
+        got = sorted(os.listdir(d)); self.assertIn(final + '.wav', got)
+        self.assertIn('Cancion (2) (8 Bars MOE) - 8A - 120.wav', got); self.assertIn('Cancion (3) (8 Bars MOE) - 8A - 120.wav', got)
+        self.assertFalse(any(n in got for n in names))                                                          # ninguna se quedó sin renombrar
+        self.assertEqual(len([g for g in got if g.endswith('.wav')]), 3)                                        # y ninguna se perdió
 
 
 class DoneTest(unittest.TestCase):

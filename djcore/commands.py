@@ -2,7 +2,7 @@
 import sys, os, csv, json, time, shutil, subprocess
 from .config import BACKUP_DIR, EXT, HIST_DIR, MARKS_MODEL
 from .storage import cmd_mark_done, load_marks, mark_done, save_marks
-from .names import normalize_artist, parse_name
+from .names import normalize_artist, parse_name, with_suffix
 from .audio import ffprobe_tags
 from .grid import detect_grid
 from .models import load_genre_model, load_marks_model, load_models
@@ -95,7 +95,12 @@ def cmd_apply(folder, backup=True):
             src = os.path.join(folder, r['original']); ext = os.path.splitext(src)[1]
             dst = os.path.join(folder, final if final.lower().endswith(ext.lower()) else final + ext)
             if not os.path.exists(src): continue
-            if src != dst and os.path.exists(dst): print(f'Ya existe {os.path.basename(dst)}; se salta {r["original"]}'); continue
+            if src != dst and os.path.exists(dst) and not (os.path.samefile(src, dst) and os.path.basename(src) != os.path.basename(dst)):
+                # el nombre ya existe (otra pista o una de este mismo lote): se añade (2), (3)… en lugar de saltarla; nunca se sobrescribe
+                stem = os.path.splitext(os.path.basename(dst))[0]; k = 2
+                while os.path.exists(os.path.join(folder, with_suffix(stem, k) + ext)): k += 1
+                dst = os.path.join(folder, with_suffix(stem, k) + ext)
+                print(f'Ya existía {stem + ext}; {r["original"]} se renombra como {os.path.basename(dst)}')
             bk = None
             if backup:
                 os.makedirs(bdir, exist_ok=True); bk = os.path.join(bdir, r['original']); shutil.copy2(src, bk)

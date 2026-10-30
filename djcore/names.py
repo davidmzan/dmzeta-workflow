@@ -29,6 +29,13 @@ def build_name(base, key, bpm, mashup=False, bars=None, typ=None, aca_starter=Fa
     if aca_out: p += ' (Aca Out)'
     return f'{p} - {key} - {int(round(bpm))}'
 
+_TAG_OR_TAIL = re.compile(r'\s*\((?:Mashup|Open Show|\d+ Bars (?:POE|MOE|FME)|Aca Starter|In Aca|In Hype|Short Edit|Aca Out)\)|\s*-\s*\d{1,2}[AB]\s*-\s*\d+\s*$')
+
+def with_suffix(final, n):
+    """Añade ' (n)' al título sin romper la gramática: 'Agua (8 Bars POE) - 5A - 133' -> 'Agua (2) (8 Bars POE) - 5A - 133'."""
+    m = _TAG_OR_TAIL.search(final)
+    return final[:m.start()] + f' ({n})' + final[m.start():] if m else f'{final} ({n})'
+
 def guess_from_name(fname):
     """Último recurso: tono tipo (10A) y BPM tipo 74Bpm sacados del nombre del archivo."""
     b = os.path.basename(fname); key = bpm = None
